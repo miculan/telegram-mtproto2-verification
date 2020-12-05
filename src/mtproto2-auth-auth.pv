@@ -1,0 +1,86 @@
+(*
+  MTProto 2.0: Creating an authorization key.
+
+  Model for the protocol used to create long-term keys
+  shared between a client and Telegram's server.
+
+  See: https://core.telegram.org/mtproto/auth_key
+
+  Uncomment the queries and processes you want to test, then run with:
+
+      proverif -lib mtproto2 mtproto2-auth-auth.pv
+
+*)
+
+(*
+  There is authentication of the server for the client (even for server reusing
+  nonce). All disjuncts are necesssary. To verify that the first two are
+  necessary, remove one of them *and* comment out the CompromisedNonce() event
+  and out(io,nk) in the client's process macro.
+
+  NOTE: before running this query, make sure that the RSAKeys() process
+  is uncomment in the main process section at the of the script.
+ *)
+(* query sk: PrivKey, sv: Principal, nc: Nonce, ns: Nonce, nk: Nonce, g: Elem, G: Group, g_a: Elem; *)
+(*   event(ClientReceivesDHParameters(sv, nc, ns, nk, g, G, g_a)) *)
+(*     ==> event(ServerSendsDHParameters(sv, nc, ns, nk, g, G, g_a)) *)
+(*      || event(CompromisedRSAKey(sk)) *)
+(*      || event(CompromisedNonce(nk)). *)
+(* ✔︎ Result: true *)
+
+(* Takes less time than the previous query *)
+query sk: PrivKey, nc: Nonce, ns: Nonce, nk: Nonce;
+  event(ClientReceivesDHParameters2(nc, ns))
+    ==> event(ServerSendsDHParameters2(nc, ns))
+     || event(CompromisedRSAKey(sk))
+     || event(CompromisedNonce(nk)).
+(* ✔︎ Result: true *)
+
+(*
+  There is no authentication of the client for the server.
+  ProVerif find a counterexample for this property in a few seconds.
+*)
+query s: Principal, nc: Nonce, ns: Nonce, nk: Nonce;
+  event(ServerAcceptsClient(s, nc, ns, nk)) ==> event(ClientRequestsDHParameters(s, nc, ns, nk)).
+(* ✖︎ Result: false *)
+
+(* query c: Principal, s: Principal, nc: Nonce, ns: Nonce, nk: Nonce, nc': Nonce, ns': Nonce, k: SharedKey, sk: PrivKey; *)
+(* event(ServerAcceptsAuthKey(s, nc, ns, k)) && event(ClientAcceptsAuthKey(nc', ns', k)) *)
+(*   ==> *)
+(*   (nc = nc' *)
+(*   && ns = ns' *)
+(*   && event(ClientStartsSession(c, s, nc)) *)
+(*   && event(ClientRequestsDHParameters(s, nc, ns, nk))) *)
+(*   || event(CompromisedRSAKey(sk)) || event(CompromisedNonce(nk)). *)
+(* Result: should be true (to be tested thoroughly) *)
+
+query s: Principal, nc: Nonce, ns: Nonce, k: SharedKey, k': SharedKey;
+event(ClientAcceptsAuthKey(nc, ns, k)) && event(ServerAcceptsAuthKey(s, nc, ns, k'))
+==> k = k'.
+(* Result: cannot be proved *)
+
+
+(*
+  Main
+*)
+const S: Principal. (* Telegram server *)
+
+(*
+  NOTE: since authentication happens before the verification of DH parameters,
+  we don't need to run "broken" clients for the purpose of verifying
+  authentication.
+*)
+process
+  new A: Principal;
+  (* new k: PrivKey; *)
+  (* insert RSAServerKeyTable(S, k, pk(k)); *)
+  (* insert RSAPublicKeyTable(S, pk(k), fp(pk(k))); *)
+  (* out(io, pk(k)); *)
+  (* out(io, k); *)
+  (0
+  | !RSAKeys(S)
+  | !(new ns: Nonce; ServerAuth(S, ns))
+  (* | !ServerAuth(S, REUSED_NONCE) *)
+  | !ClientAuth(A, S, GOOD_CLIENT)
+  )
+

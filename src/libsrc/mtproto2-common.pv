@@ -1,0 +1,162 @@
+(* Requires ProVerif 2.01 or later                                            *)
+
+(******************************************************************************)
+(*  Security and Threat Model                                                 *)
+(******************************************************************************)
+free io: channel.
+
+(*
+  A client may be implemented incorrectly, e.g., it may not perform some
+  mandatory checks on Diffie-Hellman parameters. This is modeled abstractly by
+  distinguishing between "good" and "broken" clients.
+*)
+type  ClientType.
+
+const GOOD_CLIENT    : ClientType [data].
+const BROKEN_CLIENT  : ClientType [data].
+const SKIPS_KEY_CHECK: ClientType [data].
+
+
+(******************************************************************************)
+(* Private data                                                               *)
+(******************************************************************************)
+free secretMsg: bitstring [private].
+
+
+(******************************************************************************)
+(* RSA encryption                                                             *)
+(******************************************************************************)
+type PrivKey.
+type PubKey.
+type Fingerprint.
+type Principal.
+
+fun pk(PrivKey): PubKey.
+
+fun rsaEnc(bitstring, PubKey): bitstring.
+reduc forall m: bitstring, k: PrivKey;
+  rsaDec(rsaEnc(m,pk(k)),k) = m.
+
+fun fp(PubKey): Fingerprint.
+
+table RSAServerKeyTable(Principal, PrivKey, PubKey).
+table RSAPublicKeyTable(Principal, PubKey, Fingerprint).
+
+
+(******************************************************************************)
+(* AES encryption                                                             *)
+(******************************************************************************)
+type SharedKey.
+type InitV.
+
+fun aesEnc(bitstring, SharedKey, InitV): bitstring.
+reduc forall m: bitstring, k: SharedKey, iv: InitV;
+  aesDec(aesEnc(m,k,iv),k,iv) = m.
+
+
+(******************************************************************************)
+(* Diffie-Hellman with small/bad subgroup attacks.                            *)
+(* See Bhargavan, Blanchet and Kobeissi, 2017.                                *)
+(******************************************************************************)
+type Group.
+type Elem.
+type Exp.
+type DHParam.
+
+const STRONG_DH: Group [data].
+const WEAK_DH  : Group [data].
+const BAD_ELEM : Elem  [data].
+const G :        Elem  [data].
+
+fun dhIdeal(Elem, Exp): Elem.
+equation forall x: Exp, y: Exp;
+  dhIdeal(dhIdeal(G,x),y) = dhIdeal(dhIdeal(G,y),x).
+
+fun dhExp(Group, Elem, Exp): Elem
+  reduc       forall g: Group, e: Elem, x: Exp; dhExp(WEAK_DH,e,x)          = BAD_ELEM
+    otherwise forall g: Group, e: Elem, x: Exp; dhExp(STRONG_DH,BAD_ELEM,x) = BAD_ELEM
+    otherwise forall g: Group, e: Elem, x: Exp; dhExp(STRONG_DH,e,x)        = dhIdeal(e,x).
+
+fun elem2key(Elem): SharedKey [typeConverter].
+
+letfun dhKeyGen(g: Elem, group: Group) =
+  new x: Exp;
+  let gx = elem2key(dhExp(group,g,x)) in
+  (x,gx).
+
+fun dhParam(Elem, Group): DHParam [data].
+
+
+(******************************************************************************)
+(* Hash functions, including functions with collisions.                       *)
+(******************************************************************************)
+type HashAlg.
+type SHAParam.
+
+const STRONG_HASH: HashAlg   [data].
+const WEAK_HASH  : HashAlg   [data].
+const COLLISION  : bitstring [data].
+
+fun hashIdeal(bitstring): bitstring.
+
+fun hash(HashAlg, bitstring): bitstring
+  reduc forall x: bitstring; hash(WEAK_HASH,x) = COLLISION
+    otherwise forall x: bitstring; hash(STRONG_HASH,x) = hashIdeal(x).
+
+fun shaAlg(HashAlg): SHAParam [data].
+
+(*
+  Ideal SHA functions (yes, we assume SHA-1 is perfect, but that should not
+  matter!)
+*)
+fun sha1  (bitstring): bitstring.
+fun sha256(bitstring): bitstring.
+
+
+(******************************************************************************)
+(* Decomposition into prime factors                                           *)
+(******************************************************************************)
+type Prime.
+
+fun mult(Prime, Prime): bitstring.
+reduc
+  forall x: Prime, y: Prime;
+  factorise(mult(x,y)) = (x,y).
+
+
+(******************************************************************************)
+(* Types used in MTProto 2.0                                                  *)
+(******************************************************************************)
+type Nonce.
+
+
+(******************************************************************************)
+(* Session state                                                              *)
+(******************************************************************************)
+
+(* TODO *)
+
+(******************************************************************************)
+(* Attacks                                                                    *)
+(******************************************************************************)
+type  Attack.
+
+const ATTACK     : Attack.
+(* const DONT_ATTACK: Attack. *) (* Not necessary *)
+
+fun attack(Attack): Attack [data].
+
+event PostCompromisedKey  (SharedKey).
+event CompromisedRSAKey   (PrivKey).
+event PostCompromiseRSAKey(PrivKey).
+event CompromisedNonce    (Nonce).
+event PostCompromisedNonce(Nonce).
+
+
+(******************************************************************************)
+(* Convenience functions                                                      *)
+(******************************************************************************)
+fun key2bit(SharedKey): bitstring [typeConverter].
+fun pkey2bit(PubKey)  : bitstring [typeConverter].
+fun nonce2bit(Nonce)  : bitstring [typeConverter].
+

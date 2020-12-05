@@ -1,0 +1,53 @@
+(*
+  MTProto 2.0: Secret Chats
+
+  Model for the protocol used to in secret chats.
+
+  See: https://core.telegram.org/api/end-to-end
+
+  Uncomment the processes you want to test, then run with:
+
+      proverif -lib mtproto2 mtproto2-chat-secr.pv
+*)
+
+query a: Principal, k: SharedKey;
+  attacker(secretMsg)
+    ==> event(ClientSkipsKeyCheck(a, k, true))
+     || event(ClientChecksDHConfig(a, false)).
+(* ✔︎ Result: true *)
+
+
+(*
+  Main
+*)
+const A: Principal.  (* Initiator *)
+const B: Principal.  (* Responder *)
+const A': Principal. (* Another initiator *)
+const B': Principal. (* Another principal *)
+const C:  Principal. (* Another initiator *)
+const D:  Principal. (* Another principal *)
+
+(*
+  When analyzing secret chats, the server must be considered as an untrusted
+  party. Since the server acts as a simple forwarder, we do not model it
+  explicitly; rather, we provide the adversary with the same knowledge as the
+  server, e.g., by publishing the authorization keys, and let him do the
+  forwarding.
+*)
+process
+  new authKeyA:  SharedKey; out(io, authKeyA);
+  new authKeyB:  SharedKey; out(io, authKeyB);
+  new authKeyA': SharedKey; out(io, authKeyA');
+  new authKeyB': SharedKey; out(io, authKeyB');
+  new authKeyC:  SharedKey; out(io, authKeyC);
+  new authKeyD:  SharedKey; out(io, authKeyD);
+
+  (0
+  | !ChatInitiator(C,  authKeyC,  D,  GOOD_CLIENT)
+  | !ChatResponder(D,  authKeyD,      GOOD_CLIENT)
+  | !ChatInitiator(A,  authKeyA,  B,  BROKEN_CLIENT)
+  | !ChatResponder(B,  authKeyB,      BROKEN_CLIENT)
+  | !ChatInitiator(A', authKeyA', B', SKIPS_KEY_CHECK)
+  | !ChatResponder(B', authKeyB',     SKIPS_KEY_CHECK)
+  )
+
