@@ -1,7 +1,6 @@
 # Formal verification of Telegram chat protocol MTProto 2.0
 
-## Authors: [Marino Miculan](https://www.dmif.uniud.it/miculan), [Nicola Vitacolonna](https://www.dmif.uniud.it/nicola.vitacolonna)
-### University of Udine, Italy
+## Authors: [Marino Miculan](https://www.dmif.uniud.it/miculan), [Nicola Vitacolonna](https://www.dmif.uniud.it/nicola.vitacolonna) (University of Udine, Italy)
 
 MTProto 2.0 is a suite of cryptographic protocols for instant messaging at the core of the popular Telegram messenger application, which is currently used by more than 400 millions people.
 In this work we analyse MTProto 2.0 using ProVerif, a symbolic cryptographic protocol verifier based on the Dolev-Yao model. In particular, we provide a fully automated proof of the soundness of MTProto 2.0's authentication, normal chat, end-to-end encrypted chat, and re-keying mechanisms with respect to several security properties, including authentication, integrity, confidentiality and perfect forward secrecy.
