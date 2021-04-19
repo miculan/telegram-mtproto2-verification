@@ -1,0 +1,59 @@
+(*
+ * MTProto 2.0: Rekeying
+ *
+ * Model for the protocol used for updating the session keys of secret chats.
+ *
+ * See: https://core.telegram.org/api/end-to-end/pfs
+
+ * Expected time to run this script: ~1m20s
+ *)
+
+set preciseActions = true.
+
+(*
+ * If an (honest) initiator I receives a message m encrypted with the new
+ * session key k after a rekeying session i has completed, and an (honest)
+ * responder has sent message m encrypted with a new sessione key k' after a
+ * rekeying session i', then the session and the key coincide.
+ *)
+(* query iPID, rPID: ProcessID, i, i': ChatID, I, R: Principal, k, k': SessionKey, m: bitstring; *)
+(*   event(InitiatorReceivesMsgWithNewKey(iPID, i, I,     Alice, k,  m)) *)
+(*   && event(ResponderSendsMsgWithNewKey(rPID, i, Alice, I,     k', m)) *)
+(*   ==> k = k'. *)
+(* ✔︎ Expected result: true *)
+
+(*
+ * If an (honest) initiator I thinks that she has negotiated a new key k in session i
+ * with an (honest) responder R, and R believes that she has negotiated a new key k'
+ * in session i with I, then they have computed the same key.
+ *)
+query iPID, rPID: ProcessID, i, i': ChatID, I, R: Principal, k, k': SessionKey, m: bitstring;
+  event(InitiatorHasNegotiatedNewKey(i, I, R, k))
+  && event(ResponderHasNegotiatedNewKey(i, I, R, k'))
+  ==> k = k'.
+(* ✔︎ Expected result: true *)
+
+
+(* Main *)
+
+let Init() =
+  new a: Z;
+  new b: Z;
+  let k = genStrongSessionKey(a,b) in
+  insert SecretChatClientTable(Alice, Bob, STRONG, GOOD, a, k);
+  insert SecretChatClientTable(Bob, Alice, STRONG, GOOD, b, k);
+  new authKey1: AuthKey;
+  new authKey2: AuthKey;
+  insert AuthKeyClientTable(Alice, Server, authKey1);
+  insert AuthKeyClientTable(Bob, Server, authKey2);
+  0.
+
+process
+  (0
+    | !Init()
+    | !RegisterSessionKey()
+    | !RekeyingInitiator(Server)
+    | !RekeyingResponder(Server)
+  )
+
+

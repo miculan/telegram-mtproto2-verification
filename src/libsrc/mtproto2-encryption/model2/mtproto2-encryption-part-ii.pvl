@@ -1,0 +1,36 @@
+(*
+ * MTProto 2.0: Encryption scheme - Part II (secret chats)
+ *
+ * See: https://core.telegram.org/api/end-to-end
+ *
+ *)
+
+(******************************************************************************)
+(* Variants of encode and decode functions to model secret chats              *)
+(******************************************************************************)
+
+(*
+ * E2E messages use the same encryption scheme as cloud chat messages (the
+ * payload is different), but they are encrypted with session keys negotiated
+ * by two clients (using the server as an intermediate forwarder and DH
+ * generator).
+ *
+ * Since we include the server in the attacker model, the outer layer of
+ * encryption with the authorization keys is left implicit. Consequently, the
+ * authorization keys are not used in these macros.
+ *)
+
+(* Plaintext × SessionKey × AuthKey → Message *)
+letfun encodeSecretChatMsg(m: Plaintext, k: SessionKey, unused: AuthKey) =
+  let k' = sess2shared(k) in
+  let mk = msgKey(k',m) in
+  MTPROTO(keyID(k'), mk, AES_ige_enc(m, kdfKey(k',mk), kdfIV(k',mk))).
+
+(* Message × SessionKey × AuthKey → Plaintext *)
+letfun decodeSecretChatMsg(m: Message, k: SessionKey, unused: AuthKey) =
+  let k' = sess2shared(k) in
+  let MTPROTO(=keyID(k'), mk, c) = m in
+  let d = AES_ige_dec(c, kdfKey(k',mk), kdfIV(k',mk)) in
+  let (=mk) = msgKey(k',d) in
+  d.
+

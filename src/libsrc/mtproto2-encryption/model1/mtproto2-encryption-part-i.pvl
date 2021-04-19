@@ -1,0 +1,26 @@
+(*
+ * MTProto 2.0: Encryption scheme - Part I (cloud chats)
+ *
+ * See: https://core.telegram.org/mtproto/description
+ *
+ *)
+
+(* AuthKey × Plaintext → Message *)
+letfun encodeCloudChatMsg(m: Plaintext, k: AuthKey) =
+  let k' = auth2shared(k) in
+  MTPROTO(keyID(k'), senc(m, kdf(k'))).
+
+(* AuthKey × Message → Plaintext *)
+letfun serverDecodeCloudChatMsg(m: Message) =
+  let MTPROTO(key_id, c) = m in
+  get AuthKeyServerTable(=key_id, shared2auth(k)) in
+  let d = sdec(c, kdf(k)) in
+  (d, shared2auth(k)).
+
+(* AuthKey × Message → Plaintext *)
+letfun clientDecodeCloudChatMsg(m: Message, k: AuthKey) =
+  let k' = auth2shared(k) in
+  let MTPROTO(=keyID(k'), c) = m in
+  let d = sdec(c, kdf(k')) in
+  d.
+

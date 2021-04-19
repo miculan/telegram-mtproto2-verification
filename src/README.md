@@ -8,44 +8,42 @@
 
     ```sh
     make
-    make run
+    ./run.sh <query> ... <query>
     ```
 
-4. Go take a coffee or two. Then go for dinner. 
-5. Check the results!
+  where `<query>` is any of the `mtproto2-query-*` files in the source
+  directory. Glob patterns may be used: for instance, to test all the queries:
+
+  ```sh
+  ./run.sh *query*
+  ```
+
+4. Compare the results with the expected results as indicated in the comments
+   inside the query scripts.
+
+**NOTE:** the queries have been tested with ProVerif v2.02pl1.
 
 
 ## Library files
 
 The files in the `libsrc` folder contain the code that formalizes the protocols:
 
-- `mtproto2-common`: common declarations (RSA encryption, hash functions, etc.);
+- `mtproto2-common.pvl`: common declarations (types, groups, etc.);
 
-- `mtproto2-encryption`: MTProto 2.0's encryption scheme.
+- `mtproto2-authorization.pvl`: model for the authorization protocol.
 
-- `mtproto2-authorization`: the authorization protocol.
+- `mtproto2-cloud-chat.pvl`: model for cloud chat messages.
 
-- `mtproto2-secret-chat`: the secret chat protocol.
+- `mtproto2-secret-chat.pvl`: model for the secret chat protocol.
 
-- `mtproto2-rekeying`: the re-keying protocol (not refactored yet!).
+- `mtproto2-rekeying`: model for the re-keying protocol.
+
+- `mtproto2-encryption`: this directory contains models for the cryptographic
+  primitives.
 
 To use these files, they must be concatenated into a single `mtproto2.pvl` file
-by running `make`.
+by running `make`. To use a specific model for the cryptographic primitives,
+specify the name of the corresponding directory when running `make`, e.g.:
 
-
-## Queries
-
-The files in the `src` folder contain the code that verifies the following
-security properties:
-
-- `mtproto2-auth-auth.pv`: mutual authentication in the authorization protocol.
-- `mtproto2-auth-secr.pv`: secrecy of client-server communication.
-- `mtproto2-secr-secr.pv`: secrecy, authentication and integrity in secret chats.
-- `mtproto2-reky.pv`: secrecy, authentication and integrity for re-keying.
-
-These files may be run with `make run` or with a command like the following:
-
-```sh
-proverif -lib mtproto2.pvl mtproto2-SOMETHING.pv
-```
+    make ENC=model2
 

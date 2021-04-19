@@ -1,0 +1,85 @@
+(*
+ * MTProto 2.0: Cloud chats
+ *
+ * Model for the protocol used to exchange client-server messages (cloud chats)
+ * using the long-term keys shared between a client and Telegram's server.
+ *
+ * See: https://core.telegram.org/mtproto/description
+ *
+ * Expected time to run this script: ~24min
+ *)
+
+(*
+ * If the server receives a message m encrypted with an authorization key k
+ * that an (honest) client has established, then that client has sent it,
+ * unless something bad happens.
+ *)
+query C, S: Principal, sessionID: Nonce, nc, ns, nk: Nonce, k: AuthKey, m: bitstring, sk: PrivKey;
+  event(ClientAcceptsAuthKey(C, S, nc, ns, k))
+  && event(ServerReceivesCloudMessage(S, sessionID, m, k))
+  ==> event(ClientSendsCloudMessage(S, sessionID, m, k))
+  ||  event(CompromisedRSAKey(sk))
+  ||  event(CompromisedNonce(nk))
+  ||  event(PostCompromisedAuthKey(k))
+  ||  event(ClientChecksDHParameters(false)).
+(* ✔︎ Expected result: true *)
+(* Expected time to run this query: ~7min *)
+(*
+ * NOTE: the first conjunct is necessary, because the attacker can run a
+ * session of the authorization protocol as a client and then send a message to
+ * the server, in which case the ClientSendsMessage() event would not be
+ * reached.
+ *)
+
+query C, S: Principal, sessionID: Nonce, nc, ns, nk: Nonce, k: AuthKey, m: bitstring, sk: PrivKey;
+  event(ClientAcceptsAuthKey(C, S, nc, ns, k))
+  && inj-event(ServerReceivesCloudMessage(S, sessionID, m, k))
+  ==> inj-event(ClientSendsCloudMessage(S, sessionID, m, k))
+  ||  event(CompromisedRSAKey(sk))
+  ||  event(CompromisedNonce(nk))
+  ||  event(PostCompromisedAuthKey(k))
+  ||  event(ClientChecksDHParameters(false)).
+(* ✖︎ Expected result: false *)
+(* Expected time to run this query: ~13min *)
+(*
+ * NOTE: this does not hold because the attacker can replay an honest client's
+ * message to the server (in practice, Telegram avoids this with counters and
+ * timestamps, but in our symbolic model replaying messages is possible).
+ *)
+
+(*
+ * If the client receives a message encrypted with its authorization key,
+ * then it was the server who sent it, unless something bad happens.
+ *)
+query S: Principal, sessionID: Nonce, nk: Nonce, k: AuthKey, m: bitstring, sk: PrivKey;
+  inj-event(ClientReceivesCloudMessage(S, sessionID, m, k))
+  ==> inj-event(ServerSendsCloudMessage(S, sessionID, m, k))
+  ||  event(CompromisedRSAKey(sk))
+  ||  event(CompromisedNonce(nk))
+  ||  event(PostCompromisedAuthKey(k))
+  ||  event(ClientChecksDHParameters(false))
+  ||  event(ForgedServerIdentity(S)).
+(* ✔︎ Expected result: true *)
+(* Expected time to run this query: ~2min *)
+
+
+(* Main *)
+process
+  (0
+    | !GenGoodDHParameters()
+    | !GenBadDHParameters()
+    | !GenRandomServerNonce()
+    | !GenFixedServerNonce()
+    | !RegisterRSAKey(Server)
+    | !ServerAuth(Server)
+    | !ClientAuth(Server, true)
+    | !ServerCloudChat(Server)
+    | !ClientCloudChat(Server)
+    | !ForgeServerIdentity()
+    | !LeakRSAKey()
+    | !PostCompromiseRSAKey()
+    | !LeakNk()
+    | !PostCompromiseNk()
+    | !PostCompromiseAuthKey()
+  )
+

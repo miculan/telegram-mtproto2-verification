@@ -1,0 +1,35 @@
+(******************************************************************************)
+(* MTProto 2.0's encryption scheme: common definitions                        *)
+(******************************************************************************)
+
+(*
+ * A simplified model of MTProto2's encryption scheme.
+ *)
+
+fun MTPROTO(HashValue, Ciphertext): Message [data].
+
+fun keyID(SharedKey): HashValue.
+
+fun kdf(SharedKey): SharedKey.
+
+fun fps(SessionKey): HashValue.
+
+(******************************************************************************)
+(* Asymmetric encryption                                                      *)
+(******************************************************************************)
+
+fun aenc(Plaintext, PubKey): Ciphertext.
+
+reduc forall m: Plaintext, k: PrivKey;
+  adec(aenc(m, pk(k)), k) = m.
+
+
+(******************************************************************************)
+(* Symmetric encryption                                                       *)
+(******************************************************************************)
+
+fun senc(Plaintext, SharedKey): Ciphertext.
+
+reduc forall m: Plaintext, k: SharedKey;
+  sdec(senc(m,k),k) = m.
+

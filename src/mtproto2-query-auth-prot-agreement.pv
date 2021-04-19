@@ -1,0 +1,69 @@
+(*
+ * MTProto 2.0: Creating an authorization key.
+ *
+ * Model for the protocol used to create long-term keys shared between a client
+ * and Telegram's server.
+ *
+ * See: https://core.telegram.org/mtproto/auth_key
+ *
+ * Expected time to run this script: variable (see below)
+ *)
+
+(*
+ * This setting is necessary to be able to prove the agreement query. It
+ * preserves the security properties (see ProVerif's manual).
+ *)
+set preciseActions = true.
+
+(*
+ * The following axiom assumes that processes that generate (truly) random
+ * nonces never produce a collision (which in practice should be true except
+ * with negligible probability).
+ *
+ * NOTE: this axiom is necessary to be able to prove the agreement query.
+ *)
+axiom sID: ProcessID, sID': ProcessID, ns: Nonce;
+  (*
+   * If server's process sID generates a random nonce ns and server's process
+   * sID' generates the same random nonce ns, then sID and sID' are the same
+   * process instance.
+   *)
+  event(ServerNonceIsRandom(sID, ns, true)) && event(ServerNonceIsRandom(sID', ns, true))
+  ==> sID = sID'.
+
+(*
+ * Key agreement: If client and server end up negotiating an authorization key
+ * in a given session, then the key is the same, unless something bad happens.
+ *
+ * NOTE: this takes several minutes (or possibly hours, depending on which
+ * processes you run in parallel—see below) to be verified. For instance,
+ * adding ForgeServerIdentity() seems to increase computation time
+ * significantly.
+ *)
+query cID: Principal, sID: Principal, nc: Nonce, ns: Nonce, nk: Nonce, k: AuthKey, k': AuthKey, sk: PrivKey;
+  event(ServerAcceptsAuthKey(sID, nc, ns, k)) && event(ClientAcceptsAuthKey(cID, sID, nc, ns, k'))
+  ==> k = k'
+  ||  event(ServerUsesFixedNonce(sID, true))
+  ||  event(CompromisedNonce(nk))
+  ||  event(CompromisedRSAKey(sk))
+  ||  event(ForgedServerIdentity(sID)).
+(* ✔︎ Expected result: true *)
+
+
+(* Main *)
+process
+  (0
+    | !GenGoodDHParameters()
+    | !GenBadDHParameters()
+    | !GenRandomServerNonce()
+    | !GenFixedServerNonce()
+    | !RegisterRSAKey(Server)
+    | !ServerAuth(Server)
+    | !ClientAuth(Server, true)
+    (* Uncomment the following one at a time for better verification times *)
+    (* | !ForgeServerIdentity() *)
+    (* | !LeakRSAKey() *)
+    (* | !LeakNk() *)
+    (* Post-compromise processes are not relevant for the query above. *)
+  )
+

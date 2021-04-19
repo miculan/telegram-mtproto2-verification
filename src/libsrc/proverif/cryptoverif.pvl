@@ -1,0 +1,2625 @@
+(* This library is designed for maximal compatibility with CryptoVerif.
+It contains ProVerif definitions for cryptographic primitives under the
+same name as their corresponding CryptoVerif definitions---even though
+the ProVerif assumption is very often stronger than the more realistic
+CryptoVerif assumption. *)
+
+type bitstringbot.
+const bottom:bitstringbot.
+
+(* The cryptographic primitives that can be included in the honest
+   process (that is, those passed as arguments to the macros)
+   are programmed so that they never fail. 
+   This is important because terms never fail in CryptoVerif. *)
+
+(******************************** Key generation ************************************************)
+
+def keygen(keyseed, key, kgen) {
+
+fun kgen(keyseed): key.
+
+}
+
+(***************************** Symmetric encryption *********************************************)
+
+(* ProVerif cannot distinguish IND-CPA, IND-CPA and INT-CTXT, and
+IND-CCA2 and INT-PTXT symmetric encryption schemes. The definition
+used by ProVerif corresponds best to the strongest property, that is,
+IND-CPA and INT-CTXT. *)
+
+def IND_CPA_INT_CTXT_sym_enc_all_args(key, cleartext, ciphertext, enc_seed, enc, enc_r, enc_r', dec, injbot, Z, Penc, Pencctxt) {
+
+fun enc_r(cleartext, key, enc_seed): ciphertext.
+fun injbot(cleartext):bitstringbot [data].
+
+fun dec(ciphertext, key): bitstringbot
+reduc forall m:cleartext, k:key, r:enc_seed; 
+	dec(enc_r(m, k, r), k) = injbot(m)
+otherwise forall c:ciphertext, k: key;
+        dec(c,k) = bottom.
+
+fun Z(cleartext):cleartext.
+
+(* The encryption function is probabilistic *)
+letfun enc(m: cleartext, k: key) =
+       r <-R enc_seed; enc_r(m, k, r).
+
+(* Encryption leaks Z(m), typically the length of m *) 
+reduc forall m:cleartext, r:enc_seed, k:key;  
+        leak(enc_r(m, k, r)) = Z(m).
+(* Note: providing a good definition of Z in ProVerif is a problem *)
+
+(* Test equality of keys *)
+reduc forall x:cleartext, x':cleartext, r:enc_seed, r':enc_seed, y:key;  
+        keyeq(enc_r(x,y,r),enc_r(x',y,r')) = true.
+
+}
+
+def IND_CPA_INT_CTXT_sym_enc(key, cleartext, ciphertext, enc, dec, injbot, Z, Penc, Pencctxt) { 
+
+type enc_seed [bounded].
+expand IND_CPA_INT_CTXT_sym_enc_all_args(key, cleartext, ciphertext, enc_seed, enc, enc_r, enc_r', dec, injbot, Z, Penc, Pencctxt).
+
+}
+
+def IND_CPA_INT_CTXT_sym_enc_nonce_all_args(key, cleartext, ciphertext, nonce, enc, enc', dec, injbot, Z, Penc, Pencctxt) { 
+
+fun enc(cleartext, key, nonce): ciphertext.
+
+fun injbot(cleartext):bitstringbot [data].
+
+fun dec(ciphertext, key, nonce): bitstringbot
+reduc forall m:cleartext, k:key, n:nonce; 
+	dec(enc(m, k, n), k, n) = injbot(m)
+otherwise forall c:ciphertext, k:key, n:nonce;
+        dec(c, k, n) = bottom.
+
+fun Z(cleartext):cleartext.
+
+(* The scheme is broken if the same nonce is used twice *)
+const dummy_key: key.
+
+fun break(ciphertext, ciphertext): key
+reduc forall m:cleartext, k:key, n:nonce;
+      break(enc(m, k, n),enc(m, k, n)) = dummy_key
+otherwise forall m:cleartext, m':cleartext, k:key, n:nonce;
+      break(enc(m, k, n),enc(m', k, n)) = k.
+      
+(* Encryption leaks Z(m), typically the length of m *) 
+reduc forall m:cleartext, n:nonce, k:key;  
+        leak(enc(m, k, n)) = Z(m).
+(* Note: providing a good definition of Z in ProVerif is a problem *)
+
+(* Test equality of keys *)
+reduc forall x:cleartext, x':cleartext, n:nonce, n':nonce, y:key;  
+        keyeq(enc(x,y,n),enc(x',y,n')) = true.
+
+}
+
+def IND_CPA_INT_CTXT_sym_enc_nonce(key, cleartext, ciphertext, nonce, enc, dec, injbot, Z, Penc, Pencctxt) {
+
+expand IND_CPA_INT_CTXT_sym_enc_nonce_all_args(key, cleartext, ciphertext, nonce, enc, enc', dec, injbot, Z, Penc, Pencctxt).
+
+}
+
+
+
+(* IND-CPA symmetric encryption *)
+
+def IND_CPA_sym_enc_all_args(key, cleartext, ciphertext, enc_seed, enc, enc_r, enc_r', dec, injbot, Z, Penc) { 
+
+expand IND_CPA_INT_CTXT_sym_enc_all_args(key, cleartext, ciphertext, enc_seed, enc, enc_r, enc_r', dec, injbot, Z, Penc, Pencctxt).
+
+(* Malleability *)
+reduc forall k: key, m:cleartext, r: enc_seed, m':cleartext, r': enc_seed;
+      mal(enc_r(m,k,r),m',r') = enc_r(m',k,r').
+
+}
+
+def IND_CPA_sym_enc(key, cleartext, ciphertext, enc, dec, injbot, Z, Penc) { 
+
+type enc_seed [bounded].
+expand IND_CPA_sym_enc_all_args(key, cleartext, ciphertext, enc_seed, enc, enc_r, enc_r', dec, injbot, Z, Penc).
+
+}
+
+def IND_CPA_sym_enc_nonce_all_args(key, cleartext, ciphertext, nonce, enc, enc', dec, injbot, Z, Penc) { 
+
+expand IND_CPA_INT_CTXT_sym_enc_nonce_all_args(key, cleartext, ciphertext, nonce, enc, enc', dec, injbot, Z, Penc, Pencctxt).
+
+(* TO DO Malleability is hard to write without completely breaking the scheme... *)
+
+}
+
+def IND_CPA_sym_enc_nonce(key, cleartext, ciphertext, nonce, enc, dec, injbot, Z, Penc) {
+
+expand IND_CPA_sym_enc_nonce_all_args(key, cleartext, ciphertext, nonce, enc, enc', dec, injbot, Z, Penc).
+
+}
+
+(* AEAD *)
+
+def AEAD_all_args(key, cleartext, ciphertext, add_data, enc_seed, enc, enc_r, enc_r', dec, injbot, Z, Penc, Pencctxt) { 
+
+fun enc_r(cleartext, add_data, key, enc_seed): ciphertext.
+fun injbot(cleartext):bitstringbot [data].
+
+fun dec(ciphertext, add_data, key): bitstringbot
+reduc forall m:cleartext, d:add_data, k:key, r:enc_seed; 
+	dec(enc_r(m, d, k, r), d, k) = injbot(m)
+otherwise forall c:ciphertext, d:add_data, k:key;
+        dec(c, d, k) = bottom.
+
+fun Z(cleartext):cleartext.
+
+(* The encryption function is probabilistic *)
+letfun enc(m: cleartext, d:add_data, k: key) =
+       r <-R enc_seed; enc_r(m, d, k, r).
+
+(* The additional data is authenticated, but not encrypted, so it may leak *)
+reduc forall m:cleartext, d:add_data, r:enc_seed, k:key;
+        get_data(enc_r(m, d, k, r)) = d.
+
+(* Encryption leaks Z(m), typically the length of m *) 
+reduc forall m:cleartext, d:add_data, r:enc_seed, k:key;  
+        leak(enc_r(m, d, k, r)) = Z(m).
+(* Note: providing a good definition of Z in ProVerif is a problem *)
+
+(* Test equality of keys *)
+reduc forall x:cleartext, d:add_data, x':cleartext, d':add_data, r:enc_seed, r':enc_seed, y:key;  
+        keyeq(enc_r(x,d,y,r),enc_r(x',d',y,r')) = true.
+
+}
+
+def AEAD(key, cleartext, ciphertext, add_data, enc, dec, injbot, Z, Penc, Pencctxt) { 
+
+type enc_seed [bounded].
+expand AEAD_all_args(key, cleartext, ciphertext, add_data, enc_seed, enc, enc_r, enc_r', dec, injbot, Z, Penc, Pencctxt).
+
+}
+
+def AEAD_nonce_all_args(key, cleartext, ciphertext, add_data, nonce, enc, enc', dec, injbot, Z, Penc, Pencctxt) { 
+
+fun enc(cleartext, add_data, key, nonce): ciphertext.
+
+fun injbot(cleartext):bitstringbot [data].
+
+fun dec(ciphertext, add_data, key, nonce): bitstringbot
+reduc forall m:cleartext, d:add_data, k:key, n:nonce; 
+	dec(enc(m, d, k, n), d, k, n) = injbot(m)
+otherwise forall c:ciphertext, d:add_data, k:key, n:nonce;
+        dec(c, d, k, n) = bottom.
+
+fun Z(cleartext):cleartext.
+
+(* The additional data is authenticated, but not encrypted, so it may leak *)
+reduc forall m:cleartext, d:add_data, n:nonce, k:key;
+        get_data(enc(m, d, k, n)) = d.
+
+(* The scheme is broken if the same nonce is used twice *)
+const dummy_key: key.
+
+fun break(ciphertext, ciphertext): key
+reduc forall m:cleartext, d:add_data, k:key, n:nonce;
+      break(enc(m, d, k, n),enc(m, d, k, n)) = dummy_key
+otherwise forall m:cleartext, d:add_data, m':cleartext, d':add_data, k:key, n:nonce;
+      break(enc(m, d, k, n),enc(m', d', k, n)) = k.
+      
+(* Encryption leaks Z(m), typically the length of m *) 
+reduc forall m:cleartext, d:add_data, n:nonce, k:key;  
+        leak(enc(m, d, k, n)) = Z(m).
+(* Note: providing a good definition of Z in ProVerif is a problem *)
+
+(* Test equality of keys *)
+reduc forall x:cleartext, d:add_data, x':cleartext, d':add_data, n:nonce, n':nonce, y:key;  
+        keyeq(enc(x,d,y,n),enc(x',d',y,n')) = true.
+
+
+}
+
+def AEAD_nonce(key, cleartext, ciphertext, add_data, nonce, enc, dec, injbot, Z, Penc, Pencctxt) {
+
+expand AEAD_nonce_all_args(key, cleartext, ciphertext, add_data, nonce, enc, enc', dec, injbot, Z, Penc, Pencctxt).
+
+}
+
+(* IND$-CPA. In ProVerif, the only difference we model wrt to IND-CPA is that
+   additional data does not leak for AEAD. *)
+
+def INDdollar_CPA_sym_enc_all_args(key, cleartext, ciphertext, enc_seed, cipher_stream, enc, enc_r, dec, injbot, Z, enc_len, truncate, Penc) { 
+
+expand IND_CPA_sym_enc_all_args(key, cleartext, ciphertext, enc_seed, enc, enc_r, enc_r', dec, injbot, Z, Penc).
+
+}
+
+def INDdollar_CPA_sym_enc(key, cleartext, ciphertext, cipher_stream, enc, dec, injbot, Z, enc_len, truncate, Penc) { 
+
+type enc_seed [bounded].
+expand INDdollar_CPA_sym_enc_all_args(key, cleartext, ciphertext, enc_seed, cipher_stream, enc, enc_r, dec, injbot, Z, enc_len, truncate, Penc).
+
+}
+
+def INDdollar_CPA_sym_enc_nonce(key, cleartext, ciphertext, nonce, cipher_stream, enc, dec, injbot, Z, enc_len, truncate, Penc) { 
+
+expand IND_CPA_sym_enc_nonce_all_args(key, cleartext, ciphertext, nonce, enc, enc', dec, injbot, Z, Penc). 
+
+}
+
+def INDdollar_CPA_INT_CTXT_sym_enc_all_args(key, cleartext, ciphertext, enc_seed, cipher_stream, enc, enc_r, dec, injbot, Z, enc_len, truncate, Penc, Pencctxt) { 
+
+expand IND_CPA_INT_CTXT_sym_enc_all_args(key, cleartext, ciphertext, enc_seed, enc, enc_r, enc_r', dec, injbot, Z, Penc, Pencctxt).
+
+}
+
+def INDdollar_CPA_INT_CTXT_sym_enc(key, cleartext, ciphertext, cipher_stream, enc, dec, injbot, Z, enc_len, truncate, Penc, Pencctxt) { 
+
+type enc_seed [bounded].
+expand INDdollar_CPA_INT_CTXT_sym_enc_all_args(key, cleartext, ciphertext, enc_seed, cipher_stream, enc, enc_r, dec, injbot, Z, enc_len, truncate, Penc, Pencctxt).
+
+}
+
+def INDdollar_CPA_INT_CTXT_sym_enc_nonce(key, cleartext, ciphertext, nonce, cipher_stream, enc, dec, injbot, Z, enc_len, truncate, Penc, Pencctxt) { 
+
+expand IND_CPA_INT_CTXT_sym_enc_nonce_all_args(key, cleartext, ciphertext, nonce, enc, enc', dec, injbot, Z, Penc, Pencctxt).
+
+}
+
+def AEAD_INDdollar_CPA_all_args(key, cleartext, ciphertext, add_data, enc_seed, cipher_stream, enc, enc_r, dec, injbot, Z, enc_len, truncate, Penc, Pencctxt) {
+
+fun enc_r(cleartext, add_data, key, enc_seed): ciphertext.
+fun injbot(cleartext):bitstringbot [data].
+
+fun dec(ciphertext, add_data, key): bitstringbot
+reduc forall m:cleartext, d:add_data, k:key, r:enc_seed; 
+	dec(enc_r(m, d, k, r), d, k) = injbot(m)
+otherwise forall c:ciphertext, d:add_data, k:key;
+        dec(c, d, k) = bottom.
+
+fun Z(cleartext):cleartext.
+
+(* The encryption function is probabilistic *)
+letfun enc(m: cleartext, d:add_data, k: key) =
+       r <-R enc_seed; enc_r(m, d, k, r).
+
+(* With IND$-CPA, the additional data does not leak *)
+
+(* Encryption leaks Z(m), typically the length of m *) 
+reduc forall m:cleartext, d:add_data, r:enc_seed, k:key;  
+        leak(enc_r(m, d, k, r)) = Z(m).
+(* Note: providing a good definition of Z in ProVerif is a problem *)
+
+(* Test equality of keys *)
+reduc forall x:cleartext, d:add_data, x':cleartext, d':add_data, r:enc_seed, r':enc_seed, y:key;  
+        keyeq(enc_r(x,d,y,r),enc_r(x',d',y,r')) = true.
+
+}
+
+def AEAD_INDdollar_CPA(key, cleartext, ciphertext, add_data, cipher_stream, enc, dec, injbot, Z, enc_len, truncate, Penc, Pencctxt) { 
+
+type enc_seed [bounded].
+expand AEAD_INDdollar_CPA_all_args(key, cleartext, ciphertext, add_data, enc_seed, cipher_stream, enc, enc_r, dec, injbot, Z, enc_len, truncate, Penc, Pencctxt).
+
+}
+
+def AEAD_INDdollar_CPA_nonce(key, cleartext, ciphertext, add_data, nonce, cipher_stream, enc, dec, injbot, Z, enc_len, truncate, Penc, Pencctxt) { 
+
+fun enc(cleartext, add_data, key, nonce): ciphertext.
+
+fun injbot(cleartext):bitstringbot [data].
+
+fun dec(ciphertext, add_data, key, nonce): bitstringbot
+reduc forall m:cleartext, d:add_data, k:key, n:nonce; 
+	dec(enc(m, d, k, n), d, k, n) = injbot(m)
+otherwise forall c:ciphertext, d:add_data, k:key, n:nonce;
+        dec(c, d, k, n) = bottom.
+
+fun Z(cleartext):cleartext.
+
+(* With IND$-CPA, the additional data does not leak *)
+
+(* The scheme is broken if the same nonce is used twice *)
+const dummy_key: key.
+
+fun break(ciphertext, ciphertext): key
+reduc forall m:cleartext, d:add_data, k:key, n:nonce;
+      break(enc(m, d, k, n),enc(m, d, k, n)) = dummy_key
+otherwise forall m:cleartext, d:add_data, m':cleartext, d':add_data, k:key, n:nonce;
+      break(enc(m, d, k, n),enc(m', d', k, n)) = k.
+      
+(* Encryption leaks Z(m), typically the length of m *) 
+reduc forall m:cleartext, d:add_data, n:nonce, k:key;  
+        leak(enc(m, d, k, n)) = Z(m).
+(* Note: providing a good definition of Z in ProVerif is a problem *)
+
+(* Test equality of keys *)
+reduc forall x:cleartext, d:add_data, x':cleartext, d':add_data, n:nonce, n':nonce, y:key;  
+        keyeq(enc(x,d,y,n),enc(x',d',y,n')) = true.
+
+}
+
+(* IND-CCA2 symmetric encryption *)
+
+def IND_CCA2_sym_enc_all_args(key, cleartext, ciphertext, enc_seed, enc, enc_r, enc_r', dec, dec', injbot, Z, Penc) { 
+expand IND_CPA_INT_CTXT_sym_enc_all_args(key, cleartext, ciphertext, enc_seed, enc, enc_r, enc_r', dec, injbot, Z, Penc, Pencctxt).
+}
+
+def IND_CCA2_sym_enc(key, cleartext, ciphertext, enc, dec, injbot, Z, Penc) { 
+
+type enc_seed [bounded].
+expand IND_CCA2_sym_enc_all_args(key, cleartext, ciphertext, enc_seed, enc, enc_r, enc_r', dec, dec', injbot, Z, Penc).
+
+}
+
+(* We omit INT-PTXT symmetric encryption. *)
+
+(* IND-CCA2 and INT-PTXT symmetric encryption *)
+
+def IND_CCA2_INT_PTXT_sym_enc_all_args(key, cleartext, ciphertext, enc_seed, enc, enc_r, enc_r', dec, dec', injbot, Z, Penc, Pencptxt) { 
+expand IND_CPA_INT_CTXT_sym_enc_all_args(key, cleartext, ciphertext, enc_seed, enc, enc_r, enc_r', dec, injbot, Z, Penc, Pencctxt).
+}
+
+def IND_CCA2_INT_PTXT_sym_enc(key, cleartext, ciphertext, enc, dec, injbot, Z, Penc, Pencptxt) { 
+
+type enc_seed [bounded].
+expand IND_CCA2_INT_PTXT_sym_enc_all_args(key, cleartext, ciphertext, enc_seed, enc, enc_r, enc_r', dec, dec', injbot, Z, Penc, Pencptxt).
+
+}
+
+(* ProVerif cannot distinguish a PRP block cipher from a SPRP block cipher.
+The definition used by ProVerif corresponds best to a SPRP block cipher *)
+
+def SPRP_cipher(key, blocksize, enc, dec, Penc) {
+
+fun enc(blocksize, key): blocksize.
+fun dec(blocksize, key): blocksize.
+
+equation forall m:blocksize, k:key; 
+	dec(enc(m, k), k) = m.
+equation forall m:blocksize, k:key; 
+	enc(dec(m, k), k) = m.
+
+}
+
+def PRP_cipher(key, blocksize, enc, dec, Penc) {
+
+expand SPRP_cipher(key, blocksize, enc, dec, Penc).
+
+}
+
+(*************************************** MACs ***************************************)
+(* MACs 
+   These are strong in ProVerif; they still leak the MACed message,
+   which is not protected according to the UF-CMA property.
+*)
+
+(* Deterministic MACs *)
+
+def SUF_CMA_det_mac_all_args(mkey, macinput, macres, mac, mac', check, Pmac) {
+
+fun mac(macinput, mkey):macres.
+
+fun check(macinput, mkey, macres): bool
+reduc forall m:macinput, k:mkey; 
+      check(m, k, mac(m, k)) = true
+otherwise forall m:macinput, k:mkey, t:macres; 
+      check(m, k, t) = false.
+
+reduc forall m: macinput, k: mkey;
+      getmess(mac(m,k)) = m.
+
+}
+
+def SUF_CMA_det_mac(mkey, macinput, macres, mac, check, Pmac) {
+
+expand SUF_CMA_det_mac_all_args(mkey, macinput, macres, mac, mac', check, Pmac).
+
+}
+
+(* Probabilistic MACs *)
+
+def UF_CMA_proba_mac_all_args(mkey, macinput, macres, mac_seed, mac, mac_r, mac_r', check, check', Pmac) {
+
+fun mac_r(macinput, mkey, mac_seed):macres.
+
+fun check(macinput, mkey, macres): bool
+reduc forall m:macinput, k:mkey, r: mac_seed; 
+      check(m, k, mac_r(m, k, r)) = true
+otherwise forall m:macinput, k:mkey, t:macres;
+      check(m, k, t) = false.
+
+reduc forall m: macinput, k: mkey, r: mac_seed;
+      getmess(mac_r(m,k,r)) = m.
+
+letfun mac(m: macinput, k: mkey) =
+    r <-R mac_seed; mac_r(m, k, r).
+
+}
+
+def UF_CMA_proba_mac(mkey, macinput, macres, mac, check, Pmac) {
+
+type mac_seed [bounded].
+expand UF_CMA_proba_mac_all_args(mkey, macinput, macres, mac_seed, mac, mac_r, mac_r', check, check', Pmac).
+
+}
+
+def SUF_CMA_proba_mac_all_args(mkey, macinput, macres, mac_seed, mac, mac_r, mac_r', check, Pmac) {
+
+expand UF_CMA_proba_mac_all_args(mkey, macinput, macres, mac_seed, mac, mac_r, mac_r', check, check', Pmac).
+
+}
+
+def SUF_CMA_proba_mac(mkey, macinput, macres, mac, check, Pmac) {
+
+type mac_seed [bounded].
+expand SUF_CMA_proba_mac_all_args(mkey, macinput, macres, mac_seed, mac, mac_r, mac_r', check, Pmac).
+
+}
+
+
+(******************************* Public-key encryption *******************************)
+
+def IND_CCA2_public_key_enc_all_args(keyseed, pkey, skey, cleartext, ciphertext, enc_seed, skgen, skgen2, pkgen, pkgen2, enc, enc_r, enc_r2, dec, dec2, injbot, Z, Penc, Penccoll) {
+
+fun enc_r(cleartext, pkey, enc_seed): ciphertext.
+fun skgen(keyseed):skey.
+fun pkgen(keyseed):pkey.
+
+fun injbot(cleartext):bitstringbot [data].
+
+letfun enc(m: cleartext, pk: pkey) =
+       r <-R enc_seed; enc_r(m,pk,r).
+
+(* The function Z returns for each bitstring, a bitstring
+   of the same length, consisting only of zeroes. *)
+fun Z(cleartext):cleartext.
+
+(* Encryption leaks Z(m), typically the length of m *) 
+reduc forall m:cleartext, r:enc_seed, pk:pkey;  
+        leak(enc_r(m, pk, r)) = Z(m).
+(* Note: providing a good definition of Z in ProVerif is a problem *)
+
+fun dec(ciphertext, skey): bitstringbot
+reduc forall m:cleartext, r:keyseed, r2:enc_seed; 
+	dec(enc_r(m, pkgen(r), r2), skgen(r)) = injbot(m)
+otherwise forall c:ciphertext, sk: skey;
+        dec(c, sk) = bottom.
+
+(* Test equality of keys *)
+reduc forall x:cleartext, x':cleartext, r:enc_seed, r':enc_seed, y:pkey;  
+        keyeq(enc_r(x,y,r),enc_r(x',y,r')) = true.
+
+}
+
+def IND_CCA2_public_key_enc(keyseed, pkey, skey, cleartext, ciphertext, skgen, pkgen, enc, dec, injbot, Z, Penc, Penccoll) {
+
+type enc_seed [bounded].
+expand IND_CCA2_public_key_enc_all_args(keyseed, pkey, skey, cleartext, ciphertext, enc_seed, skgen, skgen2, pkgen,pkgen2,  enc, enc_r, enc_r2, dec, dec2, injbot, Z, Penc, Penccoll).
+
+}
+
+(*************************************** Signatures ******************************)
+
+def UF_CMA_det_signature_all_args(keyseed, pkey, skey, signinput, signature, skgen, skgen2, pkgen, pkgen2, sign, sign2, check, check2, Psign, Psigncoll) {
+
+fun sign(signinput, skey): signature.
+fun skgen(keyseed):skey.
+fun pkgen(keyseed):pkey.
+
+fun check(signinput, pkey, signature): bool
+reduc forall m:signinput, r:keyseed; 
+	check(m, pkgen(r), sign(m, skgen(r))) = true
+otherwise forall m: signinput, pk: pkey, s: signature;
+        check(m, pk, s) = false.
+
+reduc forall m:signinput, r:keyseed;
+        getmess(sign(m, skgen(r))) = m.
+
+reduc forall m:signinput, r:keyseed;
+        getkey(sign(m, skgen(r))) = pkgen(r).
+
+}
+
+def UF_CMA_det_signature(keyseed, pkey, skey, signinput, signature, skgen, pkgen, sign, check, Psign, Psigncoll) {
+
+expand UF_CMA_det_signature_all_args(keyseed, pkey, skey, signinput, signature, skgen, skgen2, pkgen, pkgen2, sign, sign2, check, check2, Psign, Psigncoll).
+
+}
+
+def SUF_CMA_det_signature_all_args(keyseed, pkey, skey, signinput, signature, skgen, skgen2, pkgen, pkgen2, sign, sign2, check, check2, Psign, Psigncoll) {
+
+expand UF_CMA_det_signature_all_args(keyseed, pkey, skey, signinput, signature, skgen, skgen2, pkgen, pkgen2, sign, sign2, check, check2, Psign, Psigncoll).
+
+}
+
+def SUF_CMA_det_signature(keyseed, pkey, skey, signinput, signature, skgen, pkgen, sign, check, Psign, Psigncoll) {
+
+expand SUF_CMA_det_signature_all_args(keyseed, pkey, skey, signinput, signature, skgen, skgen2, pkgen, pkgen2, sign, sign2, check, check2, Psign, Psigncoll).
+
+}
+
+
+def UF_CMA_proba_signature_all_args(keyseed, pkey, skey, signinput, signature, sign_seed, skgen, skgen2, pkgen, pkgen2, sign, sign_r, signr2, check, check2, Psign, Psigncoll) {
+
+fun sign_r(signinput, skey, sign_seed): signature.
+fun skgen(keyseed):skey.
+fun pkgen(keyseed):pkey.
+
+letfun sign(m: signinput, sk: skey) =
+       r <-R sign_seed; sign_r(m,sk,r).
+
+fun check(signinput, pkey, signature): bool
+reduc forall m:signinput, r:keyseed, r2:sign_seed; 
+	check(m, pkgen(r), sign_r(m, skgen(r), r2)) = true
+otherwise forall m: signinput, pk: pkey, s: signature;
+        check(m, pk, s) = false.	
+
+reduc forall m:signinput, r:keyseed, r2:sign_seed;
+        getmess(sign_r(m, skgen(r), r2)) = m.
+
+reduc forall m:signinput, r:keyseed, r2:sign_seed;
+        getkey(sign_r(m, skgen(r), r2)) = pkgen(r).
+
+}
+
+def UF_CMA_proba_signature(keyseed, pkey, skey, signinput, signature, skgen, pkgen, sign, check, Psign, Psigncoll) {
+
+type sign_seed [bounded].
+expand UF_CMA_proba_signature_all_args(keyseed, pkey, skey, signinput, signature, sign_seed, skgen, skgen2, pkgen, pkgen2, sign, sign_r, signr2, check, check2, Psign, Psigncoll).
+
+}
+
+
+def SUF_CMA_proba_signature_all_args(keyseed, pkey, skey, signinput, signature, sign_seed, skgen, skgen2, pkgen, pkgen2, sign, sign_r, signr2, check, check2, Psign, Psigncoll) {
+
+expand UF_CMA_proba_signature_all_args(keyseed, pkey, skey, signinput, signature, sign_seed, skgen, skgen2, pkgen, pkgen2, sign, sign_r, signr2, check, check2, Psign, Psigncoll).
+
+}
+
+def SUF_CMA_proba_signature(keyseed, pkey, skey, signinput, signature, skgen, pkgen, sign, check, Psign, Psigncoll) {
+
+type sign_seed [bounded].
+expand SUF_CMA_proba_signature_all_args(keyseed, pkey, skey, signinput, signature, sign_seed, skgen, skgen2, pkgen, pkgen2, sign, sign_r, signr2, check, check2, Psign, Psigncoll).
+
+}
+
+(******************************** Diffie-Hellman ***************************)
+
+(* strong model for Diffie-Hellman, no bad keys
+   Note that the symbols exp' and mult are not defined by this macro and others below.
+   They should not appear in most protocols. *)
+
+def DH_good_group(G, Z, g, exp, exp', mult) {
+
+fun exp(G,Z): G.
+const g:G.
+
+equation forall x:Z, y:Z;
+         exp(exp(g,x), y) = exp(exp(g,y), x).
+
+}
+
+(* slighly weaker model for Diffie-Hellman, with bad keys
+   This model should be even weaker. (It should be weaker than
+   DH_single_coord_ladder and it is not...) *)
+
+def PV_internal_DH_with_bad_key(G, Z, g, exp, exp', mult, badKey) {
+
+expand DH_good_group(G, Z, g, exp_ideal, exp', mult).
+const badKey: G.
+
+fun exp(G,Z): G
+reduc forall y:Z;
+         exp(badKey, y) = badKey
+otherwise forall x: G, y: Z;
+         exp(x,y) = exp_ideal(x,y).
+
+}
+
+def DH_basic(G, Z, g, exp, exp', mult) {
+expand PV_internal_DH_with_bad_key(G, Z, g, exp, exp', mult, badKey).
+}
+
+def DH_proba_collision(G, Z, g, exp, exp', mult, PCollKey1, PCollKey2) {
+expand PV_internal_DH_with_bad_key(G, Z, g, exp, exp', mult, badKey).
+}
+
+def square_DH_proba_collision(G, Z, g, exp, exp', mult, PCollKey1, PCollKey2, PCollKey3) {
+expand PV_internal_DH_with_bad_key(G, Z, g, exp, exp', mult, badKey).
+}
+
+def DH_dist_random_group_element_vs_exponent(G, Z, g, exp, exp', mult, PDist) {
+}
+
+(* The next three definitions define far fewer symbols than what they have as arguments.
+   They should still be sufficient for most protocols. *)
+
+def DH_single_coord_ladder(G, Z, g, exp, mult, subG, Znw, ZnwtoZ, g_k, exp_div_k, exp_div_k', pow_k, subGtoG, zero, sub_zero) {
+(* We represent curve elements as elem(low_t, subG), where 
+   low_t represents the low-order part and subG the high-order part.
+   This is freely inspired by the model used in Tamarin.
+
+   Functions may fail when an element of G is not elem(l,h).
+   This differs from CryptoVerif in which terms never fail,
+   but I do not immediately see a better way. *)
+type low_t.
+
+expand DH_good_group(subG, Z, g_high, exp_high, exp_high', mult).
+
+const id_low: low_t.
+const sub_zero: subG.
+fun elem(low_t,subG):G.
+
+letfun g = elem(id_low,g_high).
+letfun zero = elem(id_low,sub_zero).
+letfun subGtoG(x: subG) = elem(id_low, x).
+
+reduc forall x: low_t, y: subG, x': low_t; changelow(elem(x,y),x') = elem(x',y).
+
+fun exp(G, Z): G
+reduc forall x: low_t, n: Z; exp(elem(x,sub_zero),n) = elem(id_low,sub_zero)
+otherwise forall x: low_t, y: subG, n: Z; exp(elem(x,y),n) = elem(id_low,exp_high(y,n)).
+
+const k: Z.
+
+fun pow_k(G): subG
+reduc forall x: low_t; pow_k(elem(x,sub_zero)) = sub_zero
+otherwise forall x: low_t, y: subG; pow_k(elem(x,y)) = exp_high(y,k).
+
+letfun g_k = exp_high(g_high,k).
+
+}
+
+def DH_X25519(G, Z, g, exp, mult, subG, g_k, exp_div_k, exp_div_k', pow_k, subGtoG, zero, sub_zero) {
+expand DH_single_coord_ladder(G, Z, g, exp, mult, subG, Znw, ZnwtoZ, g_k, exp_div_k, exp_div_k', pow_k, subGtoG, zero, sub_zero).
+}
+
+def DH_X448(G, Z, g, exp, mult, subG, Znw, ZnwtoZ, g_k, exp_div_k, exp_div_k', pow_k, subGtoG, zero, sub_zero) {
+expand DH_single_coord_ladder(G, Z, g, exp, mult, subG, Znw, ZnwtoZ, g_k, exp_div_k, exp_div_k', pow_k, subGtoG, zero, sub_zero).
+}
+
+(* The DH assumptions say nothing *)
+def CDH(G, Z, g, exp, exp', mult, pCDH) {}
+def CDH_RSR(G, Z, g, exp, exp', mult, pCDH) {}
+def DDH(G, Z, g, exp, exp', mult, pDDH) {}
+def GDH(G, Z, g, exp, exp', mult, pGDH) {}
+def GDH_RSR(G, Z, g, exp, exp', mult, pGDH) {}
+def square_CDH(G, Z, g, exp, exp', mult, pCDH, pSQCDH) {}
+def square_CDH_RSR(G, Z, g, exp, exp', mult, pSQCDH) {}
+def square_DDH(G, Z, g, exp, exp', mult, pDDH, pSQDDH) {}
+def square_GDH(G, Z, g, exp, exp', mult, pGDH, pSQGDH) {}
+def square_GDH_RSR(G, Z, g, exp, exp', mult, pSQGDH) {}
+
+def PRF_ODH1(G, Z, prf_in, prf_out, g, exp, exp', mult, prf, pPRF_ODH) {
+fun prf(G, prf_in): prf_out.
+}
+def PRF_ODH2(G, Z, prf_in, prf_out, g, exp, exp', mult, prf, pPRF_ODH) {
+fun prf(G, prf_in): prf_out.
+}
+def square_PRF_ODH1(G, Z, prf_in, prf_out, g, exp, exp', mult, prf, pPRF_ODH, pSQPRF_ODH) {
+fun prf(G, prf_in): prf_out.
+}
+def square_PRF_ODH2(G, Z, prf_in, prf_out, g, exp, exp', mult, prf, pPRF_ODH, pSQPRF_ODH) {
+fun prf(G, prf_in): prf_out.
+}
+
+(* There is no good model of xor and one-way trapdoor permutations
+   in ProVerif, so we omit these primitives. One-way trapdoor permutations 
+   might be modeled as public-key encryption but that is not very satisfactory. *)
+
+(************ Composition of several primitives ********************
+
+Authenticated encryption
+- from encrypt then MAC
+- from AEAD
+- from AEAD_nonce
+
+AEAD
+- from encrypt then MAC
+- from AEAD_nonce
+
+In ProVerif, using such compositions does not make much sense.
+It is better to just use the properties of the composed primitive.
+*)
+
+def Auth_Enc_from_Enc_then_MAC(emkey, cleartext, ciphertext, enc, dec, injbot, Z, Penc, Pmac) { 
+expand IND_CPA_INT_CTXT_sym_enc(emkey, cleartext, ciphertext, enc, dec, injbot, Z, Penc, Pencctxt).
+}
+
+def AuthEnc_from_AEAD(key, cleartext, ciphertext, enc, dec, injbot, Z, Penc, Pencctxt) {
+expand IND_CPA_INT_CTXT_sym_enc(key, cleartext, ciphertext, enc, dec, injbot, Z, Penc, Pencctxt).
+}
+
+def AuthEnc_from_AEAD_nonce(key, cleartext, ciphertext, enc, dec, injbot, Z, Penc, Pencctxt) {
+expand IND_CPA_INT_CTXT_sym_enc(key, cleartext, ciphertext, enc, dec, injbot, Z, Penc, Pencctxt).
+}
+
+def AEAD_from_Enc_then_MAC(emkey, cleartext, ciphertext, add_data, enc, dec, injbot, Z, Penc, Pmac) { 
+expand AEAD(emkey, cleartext, ciphertext, add_data, enc, dec, injbot, Z, Penc, Pencctxt).
+}
+
+def AEAD_from_AEAD_nonce(key, cleartext, ciphertext, add_data, enc, dec, injbot, Z, Penc, Pencctxt) {
+expand AEAD(key, cleartext, ciphertext, add_data, enc, dec, injbot, Z, Penc, Pencctxt).
+}
+(******************************* Hash functions (ROM) ****************************)
+
+(* Hash function in the random oracle model
+   key: type of the key of the hash function, which models the choice of the hash function, must be "bounded", typically "fixed"
+   input%: type of the %-th input of the hash function
+   output: type of the output of the hash function, must be "bounded" or "nonuniform" (typically "fixed").
+
+   f: the hash function.
+   WARNING: f is a keyed hash function.
+   The key must be generated once and for all at the beginning of the game 
+   and the hash oracle must be made available to the adversary,
+   by including the process f_oracle(k) where k is the key.
+   qH is the number of calls to f_oracle.
+
+   The types key, input%, and output must be declared before
+   this macro. The function f, the process f_oracle, and
+   the parameter qH are defined by this macro. They must not
+   be declared elsewhere, and they can be used only after expanding the
+   macro.
+
+ *)
+
+def ROM_hash_1(key, input1, output, f, f_oracle, qH) {
+
+fun f(key, input1):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1));
+        out(ch2, f(k, x1)).
+
+}
+
+def ROM_hash_2(key, input1, input2, output, f, f_oracle, qH) {
+
+fun f(key, input1, input2):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2));
+        out(ch2, f(k, x1, x2)).
+
+}
+
+def ROM_hash_3(key, input1, input2, input3, output, f, f_oracle, qH) {
+
+fun f(key, input1, input2, input3):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3));
+        out(ch2, f(k, x1, x2, x3)).
+
+}
+
+def ROM_hash_4(key, input1, input2, input3, input4, output, f, f_oracle, qH) {
+
+fun f(key, input1, input2, input3, input4):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3, x4: input4));
+        out(ch2, f(k, x1, x2, x3, x4)).
+
+}
+
+def ROM_hash_5(key, input1, input2, input3, input4, input5, output, f, f_oracle, qH) {
+
+fun f(key, input1, input2, input3, input4, input5):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3, x4: input4, x5: input5));
+        out(ch2, f(k, x1, x2, x3, x4, x5)).
+
+}
+
+def ROM_hash_6(key, input1, input2, input3, input4, input5, input6, output, f, f_oracle, qH) {
+
+fun f(key, input1, input2, input3, input4, input5, input6):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3, x4: input4, x5: input5, x6: input6));
+        out(ch2, f(k, x1, x2, x3, x4, x5, x6)).
+
+}
+
+def ROM_hash_7(key, input1, input2, input3, input4, input5, input6, input7, output, f, f_oracle, qH) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3, x4: input4, x5: input5, x6: input6, x7: input7));
+        out(ch2, f(k, x1, x2, x3, x4, x5, x6, x7)).
+
+}
+
+def ROM_hash_8(key, input1, input2, input3, input4, input5, input6, input7, input8, output, f, f_oracle, qH) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7, input8):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3, x4: input4, x5: input5, x6: input6, x7: input7, x8: input8));
+        out(ch2, f(k, x1, x2, x3, x4, x5, x6, x7, x8)).
+
+}
+
+def ROM_hash_9(key, input1, input2, input3, input4, input5, input6, input7, input8, input9, output, f, f_oracle, qH) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7, input8, input9):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3, x4: input4, x5: input5, x6: input6, x7: input7, x8: input8, x9: input9));
+        out(ch2, f(k, x1, x2, x3, x4, x5, x6, x7, x8, x9)).
+
+}
+
+def ROM_hash_10(key, input1, input2, input3, input4, input5, input6, input7, input8, input9, input10, output, f, f_oracle, qH) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7, input8, input9, input10):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3, x4: input4, x5: input5, x6: input6, x7: input7, x8: input8, x9: input9, x10: input10));
+        out(ch2, f(k, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10)).
+
+}
+
+def ROM_hash(key, input, output, f, f_oracle, qH) {
+expand ROM_hash_1(key, input, output, f, f_oracle, qH).
+}
+
+(* ROM with large output.
+    The only difference with ROM is that we eliminate collisions on the output.
+    The interface is the same as for ROMs. *)
+
+def ROM_hash_large_1(key, input1, output, f, f_oracle, qH) {
+
+fun f(key, input1):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1));
+        out(ch2, f(k, x1)).
+
+}
+
+def ROM_hash_large_2(key, input1, input2, output, f, f_oracle, qH) {
+
+fun f(key, input1, input2):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2));
+        out(ch2, f(k, x1, x2)).
+
+}
+
+def ROM_hash_large_3(key, input1, input2, input3, output, f, f_oracle, qH) {
+
+fun f(key, input1, input2, input3):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3));
+        out(ch2, f(k, x1, x2, x3)).
+
+}
+
+def ROM_hash_large_4(key, input1, input2, input3, input4, output, f, f_oracle, qH) {
+
+fun f(key, input1, input2, input3, input4):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3, x4: input4));
+        out(ch2, f(k, x1, x2, x3, x4)).
+
+}
+
+def ROM_hash_large_5(key, input1, input2, input3, input4, input5, output, f, f_oracle, qH) {
+
+fun f(key, input1, input2, input3, input4, input5):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3, x4: input4, x5: input5));
+        out(ch2, f(k, x1, x2, x3, x4, x5)).
+
+}
+
+def ROM_hash_large_6(key, input1, input2, input3, input4, input5, input6, output, f, f_oracle, qH) {
+
+fun f(key, input1, input2, input3, input4, input5, input6):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3, x4: input4, x5: input5, x6: input6));
+        out(ch2, f(k, x1, x2, x3, x4, x5, x6)).
+
+}
+
+def ROM_hash_large_7(key, input1, input2, input3, input4, input5, input6, input7, output, f, f_oracle, qH) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3, x4: input4, x5: input5, x6: input6, x7: input7));
+        out(ch2, f(k, x1, x2, x3, x4, x5, x6, x7)).
+
+}
+
+def ROM_hash_large_8(key, input1, input2, input3, input4, input5, input6, input7, input8, output, f, f_oracle, qH) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7, input8):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3, x4: input4, x5: input5, x6: input6, x7: input7, x8: input8));
+        out(ch2, f(k, x1, x2, x3, x4, x5, x6, x7, x8)).
+
+}
+
+def ROM_hash_large_9(key, input1, input2, input3, input4, input5, input6, input7, input8, input9, output, f, f_oracle, qH) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7, input8, input9):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3, x4: input4, x5: input5, x6: input6, x7: input7, x8: input8, x9: input9));
+        out(ch2, f(k, x1, x2, x3, x4, x5, x6, x7, x8, x9)).
+
+}
+
+def ROM_hash_large_10(key, input1, input2, input3, input4, input5, input6, input7, input8, input9, input10, output, f, f_oracle, qH) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7, input8, input9, input10):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3, x4: input4, x5: input5, x6: input6, x7: input7, x8: input8, x9: input9, x10: input10));
+        out(ch2, f(k, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10)).
+
+}
+
+def ROM_hash_large(key, input, output, f, f_oracle, qH) {
+expand ROM_hash_large_1(key, input, output, f, f_oracle, qH).
+}
+
+(* Collision resistant hash function 
+   key: type of the key of the hash function, must be "bounded" or "nonuniform", typically "fixed"
+   input%: type of the %-th input of the hash function
+   output: type of the output of the hash function
+
+   f: the hash function.
+   Phash: probability of breaking collision resistance.
+   WARNING: A collision resistant hash function is a keyed hash function.
+   The key must be generated once and for all at the beginning of the game,
+   and immediately made available to the adversary, for instance by
+   including the process f_oracle(k), where k is the key.
+
+   The types key, input%, output, and the probability Phash
+   must be declared before this macro.  The function f and the
+   process f_oracle are defined by this macro. They must not be
+   declared elsewhere, and they can be used only after expanding the
+   macro.
+
+ *)
+
+def CollisionResistant_hash_1(key, input1, output, f, f_oracle, Phash) {
+
+fun f(key, input1):output.
+
+channel ch1, ch2.
+
+let f_oracle(k: key) =
+    in(ch1, ());
+    out(ch2, k).
+
+}
+
+def CollisionResistant_hash_2(key, input1, input2, output, f, f_oracle, Phash) {
+
+fun f(key, input1, input2):output.
+
+channel ch1, ch2.
+
+let f_oracle(k: key) =
+    in(ch1, ());
+    out(ch2, k).
+
+}
+
+def CollisionResistant_hash_3(key, input1, input2, input3, output, f, f_oracle, Phash) {
+
+fun f(key, input1, input2, input3):output.
+
+channel ch1, ch2.
+
+let f_oracle(k: key) =
+    in(ch1, ());
+    out(ch2, k).
+
+}
+
+def CollisionResistant_hash_4(key, input1, input2, input3, input4, output, f, f_oracle, Phash) {
+
+fun f(key, input1, input2, input3, input4):output.
+
+channel ch1, ch2.
+
+let f_oracle(k: key) =
+    in(ch1, ());
+    out(ch2, k).
+
+}
+
+def CollisionResistant_hash_5(key, input1, input2, input3, input4, input5, output, f, f_oracle, Phash) {
+
+fun f(key, input1, input2, input3, input4, input5):output.
+
+channel ch1, ch2.
+
+let f_oracle(k: key) =
+    in(ch1, ());
+    out(ch2, k).
+
+}
+
+def CollisionResistant_hash_6(key, input1, input2, input3, input4, input5, input6, output, f, f_oracle, Phash) {
+
+fun f(key, input1, input2, input3, input4, input5, input6):output.
+
+channel ch1, ch2.
+
+let f_oracle(k: key) =
+    in(ch1, ());
+    out(ch2, k).
+
+}
+
+def CollisionResistant_hash_7(key, input1, input2, input3, input4, input5, input6, input7, output, f, f_oracle, Phash) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7):output.
+
+channel ch1, ch2.
+
+let f_oracle(k: key) =
+    in(ch1, ());
+    out(ch2, k).
+
+}
+
+def CollisionResistant_hash_8(key, input1, input2, input3, input4, input5, input6, input7, input8, output, f, f_oracle, Phash) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7, input8):output.
+
+channel ch1, ch2.
+
+let f_oracle(k: key) =
+    in(ch1, ());
+    out(ch2, k).
+
+}
+
+def CollisionResistant_hash_9(key, input1, input2, input3, input4, input5, input6, input7, input8, input9, output, f, f_oracle, Phash) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7, input8, input9):output.
+
+channel ch1, ch2.
+
+let f_oracle(k: key) =
+    in(ch1, ());
+    out(ch2, k).
+
+}
+
+def CollisionResistant_hash_10(key, input1, input2, input3, input4, input5, input6, input7, input8, input9, input10, output, f, f_oracle, Phash) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7, input8, input9, input10):output.
+
+channel ch1, ch2.
+
+let f_oracle(k: key) =
+    in(ch1, ());
+    out(ch2, k).
+
+}
+
+def CollisionResistant_hash(key, input, output, f, f_oracle, Phash) {
+expand CollisionResistant_hash_1(key, input, output, f, f_oracle, Phash).
+}
+
+(* Hidden-key collision resistant hash function
+   The interface is similar to collision-resistant hash functions, except for the addition of qH.
+   WARNING: A hidden-key collision resistant hash function is a keyed hash function.
+   The key must be generated once and for all at the beginning of the game,
+   and the hash oracle must be made available to the adversary,
+   by including the process f_oracle(k) where k is the key.
+   qH is the number of calls to f_oracle. 
+   Phash(t,N): probability of breaking collision resistance 
+   for an adversary that runs in time at most t 
+   and calls the hash oracle at most N times. *)
+
+def HiddenKeyCollisionResistant_hash_1(key, input1, output, f, f_oracle, qH, Phash) {
+
+fun f(key, input1):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1));
+        out(ch2, f(k, x1)).
+
+}
+
+def HiddenKeyCollisionResistant_hash_2(key, input1, input2, output, f, f_oracle, qH, Phash) {
+
+fun f(key, input1, input2):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2));
+        out(ch2, f(k, x1, x2)).
+
+}
+
+def HiddenKeyCollisionResistant_hash_3(key, input1, input2, input3, output, f, f_oracle, qH, Phash) {
+
+fun f(key, input1, input2, input3):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3));
+        out(ch2, f(k, x1, x2, x3)).
+
+}
+
+def HiddenKeyCollisionResistant_hash_4(key, input1, input2, input3, input4, output, f, f_oracle, qH, Phash) {
+
+fun f(key, input1, input2, input3, input4):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3, x4: input4));
+        out(ch2, f(k, x1, x2, x3, x4)).
+
+}
+
+def HiddenKeyCollisionResistant_hash_5(key, input1, input2, input3, input4, input5, output, f, f_oracle, qH, Phash) {
+
+fun f(key, input1, input2, input3, input4, input5):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3, x4: input4, x5: input5));
+        out(ch2, f(k, x1, x2, x3, x4, x5)).
+
+}
+
+def HiddenKeyCollisionResistant_hash_6(key, input1, input2, input3, input4, input5, input6, output, f, f_oracle, qH, Phash) {
+
+fun f(key, input1, input2, input3, input4, input5, input6):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3, x4: input4, x5: input5, x6: input6));
+        out(ch2, f(k, x1, x2, x3, x4, x5, x6)).
+
+}
+
+def HiddenKeyCollisionResistant_hash_7(key, input1, input2, input3, input4, input5, input6, input7, output, f, f_oracle, qH, Phash) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3, x4: input4, x5: input5, x6: input6, x7: input7));
+        out(ch2, f(k, x1, x2, x3, x4, x5, x6, x7)).
+
+}
+
+def HiddenKeyCollisionResistant_hash_8(key, input1, input2, input3, input4, input5, input6, input7, input8, output, f, f_oracle, qH, Phash) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7, input8):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3, x4: input4, x5: input5, x6: input6, x7: input7, x8: input8));
+        out(ch2, f(k, x1, x2, x3, x4, x5, x6, x7, x8)).
+
+}
+
+def HiddenKeyCollisionResistant_hash_9(key, input1, input2, input3, input4, input5, input6, input7, input8, input9, output, f, f_oracle, qH, Phash) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7, input8, input9):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3, x4: input4, x5: input5, x6: input6, x7: input7, x8: input8, x9: input9));
+        out(ch2, f(k, x1, x2, x3, x4, x5, x6, x7, x8, x9)).
+
+}
+
+def HiddenKeyCollisionResistant_hash_10(key, input1, input2, input3, input4, input5, input6, input7, input8, input9, input10, output, f, f_oracle, qH, Phash) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7, input8, input9, input10):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3, x4: input4, x5: input5, x6: input6, x7: input7, x8: input8, x9: input9, x10: input10));
+        out(ch2, f(k, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10)).
+
+}
+
+def HiddenKeyCollisionResistant_hash(key, input, output, f, f_oracle, qH, Phash) {
+expand HiddenKeyCollisionResistant_hash_1(key, input, output, f, f_oracle, qH, Phash).
+    }
+
+(* Second-preimage-resistant hash function 
+    The interface is the same as for collision-resistant hash functions.
+ *)
+
+def SecondPreimageResistant_hash_1(key, input1, output, f, f_oracle, Phash) {
+
+fun f(key, input1):output.
+
+channel ch1, ch2.
+
+let f_oracle(k: key) =
+    in(ch1, ());
+    out(ch2, k).
+
+}
+
+def SecondPreimageResistant_hash_2(key, input1, input2, output, f, f_oracle, Phash) {
+
+fun f(key, input1, input2):output.
+
+channel ch1, ch2.
+
+let f_oracle(k: key) =
+    in(ch1, ());
+    out(ch2, k).
+
+}
+
+def SecondPreimageResistant_hash_3(key, input1, input2, input3, output, f, f_oracle, Phash) {
+
+fun f(key, input1, input2, input3):output.
+
+channel ch1, ch2.
+
+let f_oracle(k: key) =
+    in(ch1, ());
+    out(ch2, k).
+
+}
+
+def SecondPreimageResistant_hash_4(key, input1, input2, input3, input4, output, f, f_oracle, Phash) {
+
+fun f(key, input1, input2, input3, input4):output.
+
+channel ch1, ch2.
+
+let f_oracle(k: key) =
+    in(ch1, ());
+    out(ch2, k).
+
+}
+
+def SecondPreimageResistant_hash_5(key, input1, input2, input3, input4, input5, output, f, f_oracle, Phash) {
+
+fun f(key, input1, input2, input3, input4, input5):output.
+
+channel ch1, ch2.
+
+let f_oracle(k: key) =
+    in(ch1, ());
+    out(ch2, k).
+
+}
+
+def SecondPreimageResistant_hash_6(key, input1, input2, input3, input4, input5, input6, output, f, f_oracle, Phash) {
+
+fun f(key, input1, input2, input3, input4, input5, input6):output.
+
+channel ch1, ch2.
+
+let f_oracle(k: key) =
+    in(ch1, ());
+    out(ch2, k).
+
+}
+
+def SecondPreimageResistant_hash_7(key, input1, input2, input3, input4, input5, input6, input7, output, f, f_oracle, Phash) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7):output.
+
+channel ch1, ch2.
+
+let f_oracle(k: key) =
+    in(ch1, ());
+    out(ch2, k).
+
+}
+
+def SecondPreimageResistant_hash_8(key, input1, input2, input3, input4, input5, input6, input7, input8, output, f, f_oracle, Phash) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7, input8):output.
+
+channel ch1, ch2.
+
+let f_oracle(k: key) =
+    in(ch1, ());
+    out(ch2, k).
+
+}
+
+def SecondPreimageResistant_hash_9(key, input1, input2, input3, input4, input5, input6, input7, input8, input9, output, f, f_oracle, Phash) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7, input8, input9):output.
+
+channel ch1, ch2.
+
+let f_oracle(k: key) =
+    in(ch1, ());
+    out(ch2, k).
+
+}
+
+def SecondPreimageResistant_hash_10(key, input1, input2, input3, input4, input5, input6, input7, input8, input9, input10, output, f, f_oracle, Phash) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7, input8, input9, input10):output.
+
+channel ch1, ch2.
+
+let f_oracle(k: key) =
+    in(ch1, ());
+    out(ch2, k).
+
+}
+
+def SecondPreimageResistant_hash(key, input, output, f, f_oracle, Phash) {
+expand SecondPreimageResistant_hash_1(key, input, output, f, f_oracle, Phash).
+}
+
+(* Hidden key second-preimage-resistant hash function 
+    The interface is the same as for hidden-key collision-resistant hash functions.
+ *)
+
+def HiddenKeySecondPreimageResistant_hash_1(key, input1, output, f, f_oracle, qH, Phash) {
+
+fun f(key, input1):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1));
+        out(ch2, f(k, x1)).
+
+}
+
+def HiddenKeySecondPreimageResistant_hash_2(key, input1, input2, output, f, f_oracle, qH, Phash) {
+
+fun f(key, input1, input2):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2));
+        out(ch2, f(k, x1, x2)).
+
+}
+
+def HiddenKeySecondPreimageResistant_hash_3(key, input1, input2, input3, output, f, f_oracle, qH, Phash) {
+
+fun f(key, input1, input2, input3):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3));
+        out(ch2, f(k, x1, x2, x3)).
+
+}
+
+def HiddenKeySecondPreimageResistant_hash_4(key, input1, input2, input3, input4, output, f, f_oracle, qH, Phash) {
+
+fun f(key, input1, input2, input3, input4):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3, x4: input4));
+        out(ch2, f(k, x1, x2, x3, x4)).
+
+}
+
+def HiddenKeySecondPreimageResistant_hash_5(key, input1, input2, input3, input4, input5, output, f, f_oracle, qH, Phash) {
+
+fun f(key, input1, input2, input3, input4, input5):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3, x4: input4, x5: input5));
+        out(ch2, f(k, x1, x2, x3, x4, x5)).
+
+}
+
+def HiddenKeySecondPreimageResistant_hash_6(key, input1, input2, input3, input4, input5, input6, output, f, f_oracle, qH, Phash) {
+
+fun f(key, input1, input2, input3, input4, input5, input6):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3, x4: input4, x5: input5, x6: input6));
+        out(ch2, f(k, x1, x2, x3, x4, x5, x6)).
+
+}
+
+def HiddenKeySecondPreimageResistant_hash_7(key, input1, input2, input3, input4, input5, input6, input7, output, f, f_oracle, qH, Phash) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3, x4: input4, x5: input5, x6: input6, x7: input7));
+        out(ch2, f(k, x1, x2, x3, x4, x5, x6, x7)).
+
+}
+
+def HiddenKeySecondPreimageResistant_hash_8(key, input1, input2, input3, input4, input5, input6, input7, input8, output, f, f_oracle, qH, Phash) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7, input8):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3, x4: input4, x5: input5, x6: input6, x7: input7, x8: input8));
+        out(ch2, f(k, x1, x2, x3, x4, x5, x6, x7, x8)).
+
+}
+
+def HiddenKeySecondPreimageResistant_hash_9(key, input1, input2, input3, input4, input5, input6, input7, input8, input9, output, f, f_oracle, qH, Phash) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7, input8, input9):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3, x4: input4, x5: input5, x6: input6, x7: input7, x8: input8, x9: input9));
+        out(ch2, f(k, x1, x2, x3, x4, x5, x6, x7, x8, x9)).
+
+}
+
+def HiddenKeySecondPreimageResistant_hash_10(key, input1, input2, input3, input4, input5, input6, input7, input8, input9, input10, output, f, f_oracle, qH, Phash) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7, input8, input9, input10):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3, x4: input4, x5: input5, x6: input6, x7: input7, x8: input8, x9: input9, x10: input10));
+        out(ch2, f(k, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10)).
+
+}
+
+def HiddenKeySecondPreimageResistant_hash(key, input, output, f, f_oracle, qH, Phash) {
+expand HiddenKeySecondPreimageResistant_hash_1(key, input, output, f, f_oracle, qH, Phash).
+    }
+
+(* Fixed-hash second-preimage-resistant hash function 
+   input%: type of the %-th input of the hash function
+   output: type of the output of the hash function
+
+   f(input...):output : the hash function. (It is not keyed.)
+   Phash: probability of breaking second-preimage resistance.
+
+   The types input%, output, and the probability Phash
+   must be declared before this macro.  The function f 
+   is defined by this macro. It must not be
+   declared elsewhere, and it can be used only after expanding the
+   macro.
+ *)
+
+def FixedSecondPreimageResistant_hash_1(input1, output, f, Phash) {
+
+fun f(input1):output.
+
+}
+
+def FixedSecondPreimageResistant_hash_2(input1, input2, output, f, Phash) {
+
+fun f(input1, input2):output.
+
+}
+
+def FixedSecondPreimageResistant_hash_3(input1, input2, input3, output, f, Phash) {
+
+fun f(input1, input2, input3):output.
+
+}
+
+def FixedSecondPreimageResistant_hash_4(input1, input2, input3, input4, output, f, Phash) {
+
+fun f(input1, input2, input3, input4):output.
+
+}
+
+def FixedSecondPreimageResistant_hash_5(input1, input2, input3, input4, input5, output, f, Phash) {
+
+fun f(input1, input2, input3, input4, input5):output.
+
+}
+
+def FixedSecondPreimageResistant_hash_6(input1, input2, input3, input4, input5, input6, output, f, Phash) {
+
+fun f(input1, input2, input3, input4, input5, input6):output.
+
+}
+
+def FixedSecondPreimageResistant_hash_7(input1, input2, input3, input4, input5, input6, input7, output, f, Phash) {
+
+fun f(input1, input2, input3, input4, input5, input6, input7):output.
+
+}
+
+def FixedSecondPreimageResistant_hash_8(input1, input2, input3, input4, input5, input6, input7, input8, output, f, Phash) {
+
+fun f(input1, input2, input3, input4, input5, input6, input7, input8):output.
+
+}
+
+def FixedSecondPreimageResistant_hash_9(input1, input2, input3, input4, input5, input6, input7, input8, input9, output, f, Phash) {
+
+fun f(input1, input2, input3, input4, input5, input6, input7, input8, input9):output.
+
+}
+
+def FixedSecondPreimageResistant_hash_10(input1, input2, input3, input4, input5, input6, input7, input8, input9, input10, output, f, Phash) {
+
+fun f(input1, input2, input3, input4, input5, input6, input7, input8, input9, input10):output.
+
+}
+
+def FixedSecondPreimageResistant_hash(input, output, f, Phash) {
+expand FixedSecondPreimageResistant_hash_1(input, output, f, Phash).
+}
+
+(* preimage-resistant hash function 
+    The interface is the same as for collision-resistant hash functions.
+ *)
+
+def PreimageResistant_hash_all_args_1(key, input1, output, f, f', f_oracle, Phash) {
+
+fun f(key, input1):output.
+
+channel ch1, ch2.
+
+let f_oracle(k: key) =
+    in(ch1, ());
+    out(ch2, k).
+
+}
+
+def PreimageResistant_hash_1(key, input1, output, f, f_oracle, Phash) {
+  expand PreimageResistant_hash_all_args_1(key, input1, output, f, f', f_oracle, Phash).
+}
+
+def PreimageResistant_hash_all_args_2(key, input1, input2, output, f, f', f_oracle, Phash) {
+
+fun f(key, input1, input2):output.
+
+channel ch1, ch2.
+
+let f_oracle(k: key) =
+    in(ch1, ());
+    out(ch2, k).
+
+}
+
+def PreimageResistant_hash_2(key, input1, input2, output, f, f_oracle, Phash) {
+  expand PreimageResistant_hash_all_args_2(key, input1, input2, output, f, f', f_oracle, Phash).
+}
+
+def PreimageResistant_hash_all_args_3(key, input1, input2, input3, output, f, f', f_oracle, Phash) {
+
+fun f(key, input1, input2, input3):output.
+
+channel ch1, ch2.
+
+let f_oracle(k: key) =
+    in(ch1, ());
+    out(ch2, k).
+
+}
+
+def PreimageResistant_hash_3(key, input1, input2, input3, output, f, f_oracle, Phash) {
+  expand PreimageResistant_hash_all_args_3(key, input1, input2, input3, output, f, f', f_oracle, Phash).
+}
+
+def PreimageResistant_hash_all_args_4(key, input1, input2, input3, input4, output, f, f', f_oracle, Phash) {
+
+fun f(key, input1, input2, input3, input4):output.
+
+channel ch1, ch2.
+
+let f_oracle(k: key) =
+    in(ch1, ());
+    out(ch2, k).
+
+}
+
+def PreimageResistant_hash_4(key, input1, input2, input3, input4, output, f, f_oracle, Phash) {
+  expand PreimageResistant_hash_all_args_4(key, input1, input2, input3, input4, output, f, f', f_oracle, Phash).
+}
+
+def PreimageResistant_hash_all_args_5(key, input1, input2, input3, input4, input5, output, f, f', f_oracle, Phash) {
+
+fun f(key, input1, input2, input3, input4, input5):output.
+
+channel ch1, ch2.
+
+let f_oracle(k: key) =
+    in(ch1, ());
+    out(ch2, k).
+
+}
+
+def PreimageResistant_hash_5(key, input1, input2, input3, input4, input5, output, f, f_oracle, Phash) {
+  expand PreimageResistant_hash_all_args_5(key, input1, input2, input3, input4, input5, output, f, f', f_oracle, Phash).
+}
+
+def PreimageResistant_hash_all_args_6(key, input1, input2, input3, input4, input5, input6, output, f, f', f_oracle, Phash) {
+
+fun f(key, input1, input2, input3, input4, input5, input6):output.
+
+channel ch1, ch2.
+
+let f_oracle(k: key) =
+    in(ch1, ());
+    out(ch2, k).
+
+}
+
+def PreimageResistant_hash_6(key, input1, input2, input3, input4, input5, input6, output, f, f_oracle, Phash) {
+  expand PreimageResistant_hash_all_args_6(key, input1, input2, input3, input4, input5, input6, output, f, f', f_oracle, Phash).
+}
+
+def PreimageResistant_hash_all_args_7(key, input1, input2, input3, input4, input5, input6, input7, output, f, f', f_oracle, Phash) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7):output.
+
+channel ch1, ch2.
+
+let f_oracle(k: key) =
+    in(ch1, ());
+    out(ch2, k).
+
+}
+
+def PreimageResistant_hash_7(key, input1, input2, input3, input4, input5, input6, input7, output, f, f_oracle, Phash) {
+  expand PreimageResistant_hash_all_args_7(key, input1, input2, input3, input4, input5, input6, input7, output, f, f', f_oracle, Phash).
+}
+
+def PreimageResistant_hash_all_args_8(key, input1, input2, input3, input4, input5, input6, input7, input8, output, f, f', f_oracle, Phash) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7, input8):output.
+
+channel ch1, ch2.
+
+let f_oracle(k: key) =
+    in(ch1, ());
+    out(ch2, k).
+
+}
+
+def PreimageResistant_hash_8(key, input1, input2, input3, input4, input5, input6, input7, input8, output, f, f_oracle, Phash) {
+  expand PreimageResistant_hash_all_args_8(key, input1, input2, input3, input4, input5, input6, input7, input8, output, f, f', f_oracle, Phash).
+}
+
+def PreimageResistant_hash_all_args_9(key, input1, input2, input3, input4, input5, input6, input7, input8, input9, output, f, f', f_oracle, Phash) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7, input8, input9):output.
+
+channel ch1, ch2.
+
+let f_oracle(k: key) =
+    in(ch1, ());
+    out(ch2, k).
+
+}
+
+def PreimageResistant_hash_9(key, input1, input2, input3, input4, input5, input6, input7, input8, input9, output, f, f_oracle, Phash) {
+  expand PreimageResistant_hash_all_args_9(key, input1, input2, input3, input4, input5, input6, input7, input8, input9, output, f, f', f_oracle, Phash).
+}
+
+def PreimageResistant_hash_all_args_10(key, input1, input2, input3, input4, input5, input6, input7, input8, input9, input10, output, f, f', f_oracle, Phash) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7, input8, input9, input10):output.
+
+channel ch1, ch2.
+
+let f_oracle(k: key) =
+    in(ch1, ());
+    out(ch2, k).
+
+}
+
+def PreimageResistant_hash_10(key, input1, input2, input3, input4, input5, input6, input7, input8, input9, input10, output, f, f_oracle, Phash) {
+  expand PreimageResistant_hash_all_args_10(key, input1, input2, input3, input4, input5, input6, input7, input8, input9, input10, output, f, f', f_oracle, Phash).
+}
+
+def PreimageResistant_hash(key, input, output, f, f_oracle, Phash) {
+expand PreimageResistant_hash_1(key, input, output, f, f_oracle, Phash).
+}
+
+def PreimageResistant_hash_all_args(key, input, output, f, f', f_oracle, Phash) {
+expand PreimageResistant_hash_all_args_1(key, input, output, f, f', f_oracle, Phash).
+}
+
+(* Hidden key preimage-resistant hash function 
+    The interface is the same as for hidden-key collision-resistant hash functions.
+ *)
+
+def HiddenKeyPreimageResistant_hash_all_args_1(key, input1, output, f, f', f_oracle, qH, Phash) {
+
+fun f(key, input1):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1));
+        out(ch2, f(k, x1)).
+
+}
+
+def HiddenKeyPreimageResistant_hash_1(key, input1, output, f, f_oracle, qH, Phash) {
+  expand HiddenKeyPreimageResistant_hash_all_args_1(key, input1, output, f, f', f_oracle, qH, Phash).
+}
+
+def HiddenKeyPreimageResistant_hash_all_args_2(key, input1, input2, output, f, f', f_oracle, qH, Phash) {
+
+fun f(key, input1, input2):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2));
+        out(ch2, f(k, x1, x2)).
+
+}
+
+def HiddenKeyPreimageResistant_hash_2(key, input1, input2, output, f, f_oracle, qH, Phash) {
+  expand HiddenKeyPreimageResistant_hash_all_args_2(key, input1, input2, output, f, f', f_oracle, qH, Phash).
+}
+
+def HiddenKeyPreimageResistant_hash_all_args_3(key, input1, input2, input3, output, f, f', f_oracle, qH, Phash) {
+
+fun f(key, input1, input2, input3):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3));
+        out(ch2, f(k, x1, x2, x3)).
+
+}
+
+def HiddenKeyPreimageResistant_hash_3(key, input1, input2, input3, output, f, f_oracle, qH, Phash) {
+  expand HiddenKeyPreimageResistant_hash_all_args_3(key, input1, input2, input3, output, f, f', f_oracle, qH, Phash).
+}
+
+def HiddenKeyPreimageResistant_hash_all_args_4(key, input1, input2, input3, input4, output, f, f', f_oracle, qH, Phash) {
+
+fun f(key, input1, input2, input3, input4):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3, x4: input4));
+        out(ch2, f(k, x1, x2, x3, x4)).
+
+}
+
+def HiddenKeyPreimageResistant_hash_4(key, input1, input2, input3, input4, output, f, f_oracle, qH, Phash) {
+  expand HiddenKeyPreimageResistant_hash_all_args_4(key, input1, input2, input3, input4, output, f, f', f_oracle, qH, Phash).
+}
+
+def HiddenKeyPreimageResistant_hash_all_args_5(key, input1, input2, input3, input4, input5, output, f, f', f_oracle, qH, Phash) {
+
+fun f(key, input1, input2, input3, input4, input5):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3, x4: input4, x5: input5));
+        out(ch2, f(k, x1, x2, x3, x4, x5)).
+
+}
+
+def HiddenKeyPreimageResistant_hash_5(key, input1, input2, input3, input4, input5, output, f, f_oracle, qH, Phash) {
+  expand HiddenKeyPreimageResistant_hash_all_args_5(key, input1, input2, input3, input4, input5, output, f, f', f_oracle, qH, Phash).
+}
+
+def HiddenKeyPreimageResistant_hash_all_args_6(key, input1, input2, input3, input4, input5, input6, output, f, f', f_oracle, qH, Phash) {
+
+fun f(key, input1, input2, input3, input4, input5, input6):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3, x4: input4, x5: input5, x6: input6));
+        out(ch2, f(k, x1, x2, x3, x4, x5, x6)).
+
+}
+
+def HiddenKeyPreimageResistant_hash_6(key, input1, input2, input3, input4, input5, input6, output, f, f_oracle, qH, Phash) {
+  expand HiddenKeyPreimageResistant_hash_all_args_6(key, input1, input2, input3, input4, input5, input6, output, f, f', f_oracle, qH, Phash).
+}
+
+def HiddenKeyPreimageResistant_hash_all_args_7(key, input1, input2, input3, input4, input5, input6, input7, output, f, f', f_oracle, qH, Phash) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3, x4: input4, x5: input5, x6: input6, x7: input7));
+        out(ch2, f(k, x1, x2, x3, x4, x5, x6, x7)).
+
+}
+
+def HiddenKeyPreimageResistant_hash_7(key, input1, input2, input3, input4, input5, input6, input7, output, f, f_oracle, qH, Phash) {
+  expand HiddenKeyPreimageResistant_hash_all_args_7(key, input1, input2, input3, input4, input5, input6, input7, output, f, f', f_oracle, qH, Phash).
+}
+
+def HiddenKeyPreimageResistant_hash_all_args_8(key, input1, input2, input3, input4, input5, input6, input7, input8, output, f, f', f_oracle, qH, Phash) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7, input8):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3, x4: input4, x5: input5, x6: input6, x7: input7, x8: input8));
+        out(ch2, f(k, x1, x2, x3, x4, x5, x6, x7, x8)).
+
+}
+
+def HiddenKeyPreimageResistant_hash_8(key, input1, input2, input3, input4, input5, input6, input7, input8, output, f, f_oracle, qH, Phash) {
+  expand HiddenKeyPreimageResistant_hash_all_args_8(key, input1, input2, input3, input4, input5, input6, input7, input8, output, f, f', f_oracle, qH, Phash).
+}
+
+def HiddenKeyPreimageResistant_hash_all_args_9(key, input1, input2, input3, input4, input5, input6, input7, input8, input9, output, f, f', f_oracle, qH, Phash) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7, input8, input9):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3, x4: input4, x5: input5, x6: input6, x7: input7, x8: input8, x9: input9));
+        out(ch2, f(k, x1, x2, x3, x4, x5, x6, x7, x8, x9)).
+
+}
+
+def HiddenKeyPreimageResistant_hash_9(key, input1, input2, input3, input4, input5, input6, input7, input8, input9, output, f, f_oracle, qH, Phash) {
+  expand HiddenKeyPreimageResistant_hash_all_args_9(key, input1, input2, input3, input4, input5, input6, input7, input8, input9, output, f, f', f_oracle, qH, Phash).
+}
+
+def HiddenKeyPreimageResistant_hash_all_args_10(key, input1, input2, input3, input4, input5, input6, input7, input8, input9, input10, output, f, f', f_oracle, qH, Phash) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7, input8, input9, input10):output.
+
+
+param qH [noninteractive].
+channel ch1, ch2.
+
+let f_oracle(k: key) = 
+        foreach iH <= qH do
+	in(ch1, (x1: input1, x2: input2, x3: input3, x4: input4, x5: input5, x6: input6, x7: input7, x8: input8, x9: input9, x10: input10));
+        out(ch2, f(k, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10)).
+
+}
+
+def HiddenKeyPreimageResistant_hash_10(key, input1, input2, input3, input4, input5, input6, input7, input8, input9, input10, output, f, f_oracle, qH, Phash) {
+  expand HiddenKeyPreimageResistant_hash_all_args_10(key, input1, input2, input3, input4, input5, input6, input7, input8, input9, input10, output, f, f', f_oracle, qH, Phash).
+}
+
+def HiddenKeyPreimageResistant_hash(key, input, output, f, f_oracle, qH, Phash) {
+expand HiddenKeyPreimageResistant_hash_1(key, input, output, f, f_oracle, qH, Phash).
+}
+
+def HiddenKeyPreimageResistant_hash_all_args(key, input, output, f, f', f_oracle, qH, Phash) {
+expand HiddenKeyPreimageResistant_hash_all_args_1(key, input, output, f, f', f_oracle, qH, Phash).
+}
+
+(* Fixed-hash preimage-resistant hash function 
+    The interface is the same as for fixed-hash second-preimage-resistant hash functions.
+ *)
+
+def FixedPreimageResistant_hash_all_args_1(input1, output, f, f', Phash) {
+
+fun f(input1):output.
+
+}
+
+def FixedPreimageResistant_hash_1(input1, output, f, Phash) {
+  expand FixedPreimageResistant_hash_all_args_1(input1, output, f, f', Phash).
+}
+
+def FixedPreimageResistant_hash_all_args_2(input1, input2, output, f, f', Phash) {
+
+fun f(input1, input2):output.
+
+}
+
+def FixedPreimageResistant_hash_2(input1, input2, output, f, Phash) {
+  expand FixedPreimageResistant_hash_all_args_2(input1, input2, output, f, f', Phash).
+}
+
+def FixedPreimageResistant_hash_all_args_3(input1, input2, input3, output, f, f', Phash) {
+
+fun f(input1, input2, input3):output.
+
+}
+
+def FixedPreimageResistant_hash_3(input1, input2, input3, output, f, Phash) {
+  expand FixedPreimageResistant_hash_all_args_3(input1, input2, input3, output, f, f', Phash).
+}
+
+def FixedPreimageResistant_hash_all_args_4(input1, input2, input3, input4, output, f, f', Phash) {
+
+fun f(input1, input2, input3, input4):output.
+
+}
+
+def FixedPreimageResistant_hash_4(input1, input2, input3, input4, output, f, Phash) {
+  expand FixedPreimageResistant_hash_all_args_4(input1, input2, input3, input4, output, f, f', Phash).
+}
+
+def FixedPreimageResistant_hash_all_args_5(input1, input2, input3, input4, input5, output, f, f', Phash) {
+
+fun f(input1, input2, input3, input4, input5):output.
+
+}
+
+def FixedPreimageResistant_hash_5(input1, input2, input3, input4, input5, output, f, Phash) {
+  expand FixedPreimageResistant_hash_all_args_5(input1, input2, input3, input4, input5, output, f, f', Phash).
+}
+
+def FixedPreimageResistant_hash_all_args_6(input1, input2, input3, input4, input5, input6, output, f, f', Phash) {
+
+fun f(input1, input2, input3, input4, input5, input6):output.
+
+}
+
+def FixedPreimageResistant_hash_6(input1, input2, input3, input4, input5, input6, output, f, Phash) {
+  expand FixedPreimageResistant_hash_all_args_6(input1, input2, input3, input4, input5, input6, output, f, f', Phash).
+}
+
+def FixedPreimageResistant_hash_all_args_7(input1, input2, input3, input4, input5, input6, input7, output, f, f', Phash) {
+
+fun f(input1, input2, input3, input4, input5, input6, input7):output.
+
+}
+
+def FixedPreimageResistant_hash_7(input1, input2, input3, input4, input5, input6, input7, output, f, Phash) {
+  expand FixedPreimageResistant_hash_all_args_7(input1, input2, input3, input4, input5, input6, input7, output, f, f', Phash).
+}
+
+def FixedPreimageResistant_hash_all_args_8(input1, input2, input3, input4, input5, input6, input7, input8, output, f, f', Phash) {
+
+fun f(input1, input2, input3, input4, input5, input6, input7, input8):output.
+
+}
+
+def FixedPreimageResistant_hash_8(input1, input2, input3, input4, input5, input6, input7, input8, output, f, Phash) {
+  expand FixedPreimageResistant_hash_all_args_8(input1, input2, input3, input4, input5, input6, input7, input8, output, f, f', Phash).
+}
+
+def FixedPreimageResistant_hash_all_args_9(input1, input2, input3, input4, input5, input6, input7, input8, input9, output, f, f', Phash) {
+
+fun f(input1, input2, input3, input4, input5, input6, input7, input8, input9):output.
+
+}
+
+def FixedPreimageResistant_hash_9(input1, input2, input3, input4, input5, input6, input7, input8, input9, output, f, Phash) {
+  expand FixedPreimageResistant_hash_all_args_9(input1, input2, input3, input4, input5, input6, input7, input8, input9, output, f, f', Phash).
+}
+
+def FixedPreimageResistant_hash_all_args_10(input1, input2, input3, input4, input5, input6, input7, input8, input9, input10, output, f, f', Phash) {
+
+fun f(input1, input2, input3, input4, input5, input6, input7, input8, input9, input10):output.
+
+}
+
+def FixedPreimageResistant_hash_10(input1, input2, input3, input4, input5, input6, input7, input8, input9, input10, output, f, Phash) {
+  expand FixedPreimageResistant_hash_all_args_10(input1, input2, input3, input4, input5, input6, input7, input8, input9, input10, output, f, f', Phash).
+}
+
+def FixedPreimageResistant_hash(input, output, f, Phash) {
+expand FixedPreimageResistant_hash_1(input, output, f, Phash).
+}
+
+def FixedPreimageResistant_hash_all_args(input, output, f, f', Phash) {
+expand FixedPreimageResistant_hash_all_args_1(input, output, f, f', Phash).
+}
+
+(* Pseudo random function (PRF) 
+   key: type of keys, must be "bounded" (to be able to generate random numbers from it, and to talk about the runtime of f without mentioned the length of the key), typically "fixed" and "large".
+   input%: type of the %-th input of the PRF.
+   output: type of the output of the PRF, must be "bounded" or "nonuniform", typically "fixed".
+
+   f: PRF function
+
+   Pprf(t, N, l): probability of breaking the PRF property
+   in time t, for one key, N queries to the PRF of length at most l.
+
+   The types key, input, output and the probability Pprf must
+   be declared before this macro is expanded. The function f
+   is declared by this macro. It must not be declared elsewhere,
+   and it can be used only after expanding the macro.
+
+      *)
+
+def PRF_1(key, input1, output, f, Pprf) {
+
+fun f(key, input1):output.
+
+
+
+}
+
+def PRF_2(key, input1, input2, output, f, Pprf) {
+
+fun f(key, input1, input2):output.
+
+
+
+}
+
+def PRF_3(key, input1, input2, input3, output, f, Pprf) {
+
+fun f(key, input1, input2, input3):output.
+
+
+
+}
+
+def PRF_4(key, input1, input2, input3, input4, output, f, Pprf) {
+
+fun f(key, input1, input2, input3, input4):output.
+
+
+
+}
+
+def PRF_5(key, input1, input2, input3, input4, input5, output, f, Pprf) {
+
+fun f(key, input1, input2, input3, input4, input5):output.
+
+
+
+}
+
+def PRF_6(key, input1, input2, input3, input4, input5, input6, output, f, Pprf) {
+
+fun f(key, input1, input2, input3, input4, input5, input6):output.
+
+
+
+}
+
+def PRF_7(key, input1, input2, input3, input4, input5, input6, input7, output, f, Pprf) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7):output.
+
+
+
+}
+
+def PRF_8(key, input1, input2, input3, input4, input5, input6, input7, input8, output, f, Pprf) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7, input8):output.
+
+
+
+}
+
+def PRF_9(key, input1, input2, input3, input4, input5, input6, input7, input8, input9, output, f, Pprf) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7, input8, input9):output.
+
+
+
+}
+
+def PRF_10(key, input1, input2, input3, input4, input5, input6, input7, input8, input9, input10, output, f, Pprf) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7, input8, input9, input10):output.
+
+
+
+}
+
+def PRF(key, input, output, f, Pprf) {
+expand PRF_1(key, input, output, f, Pprf).
+}
+
+(* Pseudo random function (PRF) with large output.
+   The only difference with PRF is that we eliminate collisions on the output.
+   The interface is the same as for PRFs. *)
+
+def PRF_large_1(key, input1, output, f, Pprf) {
+
+fun f(key, input1):output.
+
+
+
+}
+
+def PRF_large_2(key, input1, input2, output, f, Pprf) {
+
+fun f(key, input1, input2):output.
+
+
+
+}
+
+def PRF_large_3(key, input1, input2, input3, output, f, Pprf) {
+
+fun f(key, input1, input2, input3):output.
+
+
+
+}
+
+def PRF_large_4(key, input1, input2, input3, input4, output, f, Pprf) {
+
+fun f(key, input1, input2, input3, input4):output.
+
+
+
+}
+
+def PRF_large_5(key, input1, input2, input3, input4, input5, output, f, Pprf) {
+
+fun f(key, input1, input2, input3, input4, input5):output.
+
+
+
+}
+
+def PRF_large_6(key, input1, input2, input3, input4, input5, input6, output, f, Pprf) {
+
+fun f(key, input1, input2, input3, input4, input5, input6):output.
+
+
+
+}
+
+def PRF_large_7(key, input1, input2, input3, input4, input5, input6, input7, output, f, Pprf) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7):output.
+
+
+
+}
+
+def PRF_large_8(key, input1, input2, input3, input4, input5, input6, input7, input8, output, f, Pprf) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7, input8):output.
+
+
+
+}
+
+def PRF_large_9(key, input1, input2, input3, input4, input5, input6, input7, input8, input9, output, f, Pprf) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7, input8, input9):output.
+
+
+
+}
+
+def PRF_large_10(key, input1, input2, input3, input4, input5, input6, input7, input8, input9, input10, output, f, Pprf) {
+
+fun f(key, input1, input2, input3, input4, input5, input6, input7, input8, input9, input10):output.
+
+
+
+}
+
+def PRF_large(key, input, output, f, Pprf) {
+expand PRF_large_1(key, input, output, f, Pprf).
+}
+
+def ICM_cipher(cipherkey, key, blocksize, enc, dec, enc_dec_oracle, qE, qD) {
+
+fun enc(cipherkey, blocksize, key): blocksize.
+fun dec(cipherkey, blocksize, key): blocksize.
+
+equation forall ck:cipherkey, m:blocksize, k:key; 
+	dec(ck, enc(ck, m, k), k) = m.
+equation forall ck:cipherkey, m:blocksize, k:key; 
+	enc(ck, dec(ck, m, k), k) = m.
+
+param qE, qD [noninteractive].
+channel chE1, chE2, chD1, chD2.
+let enc_dec_oracle(ck: cipherkey) =
+    (foreach iE <= qE do in(chE1, (x:blocksize, ke:key)); out(chE2, enc(ck,x,ke)))
+  | (foreach iD <= qD do in(chD1, (m:blocksize, kd:key)); out(chD2, dec(ck,m,kd))). 
+
+}
+
+(* random_split_N defines functions to split a random value into N values.
+
+  input_t: type of the input value
+  part%_t: types of the output parts
+  tuple_t: type of a tuple of the output parts
+  tuple(part1_t, ..., partN_t): tuple_t builds a tuple from N parts.
+  split(input_t): tuple_t splits the input into N parts and returns a tuple of these parts
+  Usage: let tuple(x1, ..., xN) = split(y) in ...
+
+  input_t, part%_t, and tuple_t must be defined before.
+  tuple and split are defined by this macro. 
+
+  This macro does not model that each xi leaks a part of y.
+  It is suitable to split the result of a hash function,
+  when you do not use that result in other ways and do not
+  prove strong secrecy properties on that result.
+  Other usages may not be sound. *)
+
+def random_split_1(input_t, part1_t, tuple_t, tuple, split) {
+
+  fun tuple(part1_t): tuple_t [data].
+
+  fun get1(input_t): part1_t.
+
+  letfun split(r: input_t) = tuple(get1(r)).
+
+  reduc forall x: input_t; concat(get1(x)) = x.
+
+}
+
+def random_split_2(input_t, part1_t, part2_t, tuple_t, tuple, split) {
+
+  fun tuple(part1_t, part2_t): tuple_t [data].
+
+  fun get1(input_t): part1_t.
+  fun get2(input_t): part2_t.
+
+  letfun split(r: input_t) = tuple(get1(r), get2(r)).
+
+  reduc forall x: input_t; concat(get1(x), get2(x)) = x.
+
+}
+
+def random_split_3(input_t, part1_t, part2_t, part3_t, tuple_t, tuple, split) {
+
+  fun tuple(part1_t, part2_t, part3_t): tuple_t [data].
+
+  fun get1(input_t): part1_t.
+  fun get2(input_t): part2_t.
+  fun get3(input_t): part3_t.
+
+  letfun split(r: input_t) = tuple(get1(r), get2(r), get3(r)).
+
+  reduc forall x: input_t; concat(get1(x), get2(x), get3(x)) = x.
+
+}
+
+def random_split_4(input_t, part1_t, part2_t, part3_t, part4_t, tuple_t, tuple, split) {
+
+  fun tuple(part1_t, part2_t, part3_t, part4_t): tuple_t [data].
+
+  fun get1(input_t): part1_t.
+  fun get2(input_t): part2_t.
+  fun get3(input_t): part3_t.
+  fun get4(input_t): part4_t.
+
+  letfun split(r: input_t) = tuple(get1(r), get2(r), get3(r), get4(r)).
+
+  reduc forall x: input_t; concat(get1(x), get2(x), get3(x), get4(x)) = x.
+
+}
+
+def random_split_5(input_t, part1_t, part2_t, part3_t, part4_t, part5_t, tuple_t, tuple, split) {
+
+  fun tuple(part1_t, part2_t, part3_t, part4_t, part5_t): tuple_t [data].
+
+  fun get1(input_t): part1_t.
+  fun get2(input_t): part2_t.
+  fun get3(input_t): part3_t.
+  fun get4(input_t): part4_t.
+  fun get5(input_t): part5_t.
+
+  letfun split(r: input_t) = tuple(get1(r), get2(r), get3(r), get4(r), get5(r)).
+
+  reduc forall x: input_t; concat(get1(x), get2(x), get3(x), get4(x), get5(x)) = x.
+
+}
+
+def random_split_6(input_t, part1_t, part2_t, part3_t, part4_t, part5_t, part6_t, tuple_t, tuple, split) {
+
+  fun tuple(part1_t, part2_t, part3_t, part4_t, part5_t, part6_t): tuple_t [data].
+
+  fun get1(input_t): part1_t.
+  fun get2(input_t): part2_t.
+  fun get3(input_t): part3_t.
+  fun get4(input_t): part4_t.
+  fun get5(input_t): part5_t.
+  fun get6(input_t): part6_t.
+
+  letfun split(r: input_t) = tuple(get1(r), get2(r), get3(r), get4(r), get5(r), get6(r)).
+
+  reduc forall x: input_t; concat(get1(x), get2(x), get3(x), get4(x), get5(x), get6(x)) = x.
+
+}
+
+def random_split_7(input_t, part1_t, part2_t, part3_t, part4_t, part5_t, part6_t, part7_t, tuple_t, tuple, split) {
+
+  fun tuple(part1_t, part2_t, part3_t, part4_t, part5_t, part6_t, part7_t): tuple_t [data].
+
+  fun get1(input_t): part1_t.
+  fun get2(input_t): part2_t.
+  fun get3(input_t): part3_t.
+  fun get4(input_t): part4_t.
+  fun get5(input_t): part5_t.
+  fun get6(input_t): part6_t.
+  fun get7(input_t): part7_t.
+
+  letfun split(r: input_t) = tuple(get1(r), get2(r), get3(r), get4(r), get5(r), get6(r), get7(r)).
+
+  reduc forall x: input_t; concat(get1(x), get2(x), get3(x), get4(x), get5(x), get6(x), get7(x)) = x.
+
+}
+
+def random_split_8(input_t, part1_t, part2_t, part3_t, part4_t, part5_t, part6_t, part7_t, part8_t, tuple_t, tuple, split) {
+
+  fun tuple(part1_t, part2_t, part3_t, part4_t, part5_t, part6_t, part7_t, part8_t): tuple_t [data].
+
+  fun get1(input_t): part1_t.
+  fun get2(input_t): part2_t.
+  fun get3(input_t): part3_t.
+  fun get4(input_t): part4_t.
+  fun get5(input_t): part5_t.
+  fun get6(input_t): part6_t.
+  fun get7(input_t): part7_t.
+  fun get8(input_t): part8_t.
+
+  letfun split(r: input_t) = tuple(get1(r), get2(r), get3(r), get4(r), get5(r), get6(r), get7(r), get8(r)).
+
+  reduc forall x: input_t; concat(get1(x), get2(x), get3(x), get4(x), get5(x), get6(x), get7(x), get8(x)) = x.
+
+}
+
+def random_split_9(input_t, part1_t, part2_t, part3_t, part4_t, part5_t, part6_t, part7_t, part8_t, part9_t, tuple_t, tuple, split) {
+
+  fun tuple(part1_t, part2_t, part3_t, part4_t, part5_t, part6_t, part7_t, part8_t, part9_t): tuple_t [data].
+
+  fun get1(input_t): part1_t.
+  fun get2(input_t): part2_t.
+  fun get3(input_t): part3_t.
+  fun get4(input_t): part4_t.
+  fun get5(input_t): part5_t.
+  fun get6(input_t): part6_t.
+  fun get7(input_t): part7_t.
+  fun get8(input_t): part8_t.
+  fun get9(input_t): part9_t.
+
+  letfun split(r: input_t) = tuple(get1(r), get2(r), get3(r), get4(r), get5(r), get6(r), get7(r), get8(r), get9(r)).
+
+  reduc forall x: input_t; concat(get1(x), get2(x), get3(x), get4(x), get5(x), get6(x), get7(x), get8(x), get9(x)) = x.
+
+}
+
+def random_split_10(input_t, part1_t, part2_t, part3_t, part4_t, part5_t, part6_t, part7_t, part8_t, part9_t, part10_t, tuple_t, tuple, split) {
+
+  fun tuple(part1_t, part2_t, part3_t, part4_t, part5_t, part6_t, part7_t, part8_t, part9_t, part10_t): tuple_t [data].
+
+  fun get1(input_t): part1_t.
+  fun get2(input_t): part2_t.
+  fun get3(input_t): part3_t.
+  fun get4(input_t): part4_t.
+  fun get5(input_t): part5_t.
+  fun get6(input_t): part6_t.
+  fun get7(input_t): part7_t.
+  fun get8(input_t): part8_t.
+  fun get9(input_t): part9_t.
+  fun get10(input_t): part10_t.
+
+  letfun split(r: input_t) = tuple(get1(r), get2(r), get3(r), get4(r), get5(r), get6(r), get7(r), get8(r), get9(r), get10(r)).
+
+  reduc forall x: input_t; concat(get1(x), get2(x), get3(x), get4(x), get5(x), get6(x), get7(x), get8(x), get9(x), get10(x)) = x.
+
+}
+

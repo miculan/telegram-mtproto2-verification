@@ -1,0 +1,566 @@
+(*
+ * MTProto 2.0: Creating an authorization key.
+ *
+ * Model for the protocol used to create long-term keys shared between a client
+ * and Telegram's server.
+ *
+ * See: https://core.telegram.org/mtproto/auth_key
+ *)
+
+(******************************************************************************)
+(* "Abstract" cryptographic primitives                                        *)
+(*                                                                            *)
+(* NOTE: These MUST be defined somewhere before this point. They are          *)
+(* not defined here so that the choice of a model for MTProto's encryption    *)
+(* scheme can be done independently, without touching this file.              *)
+(*                                                                            *)
+(* The reference for MTProto's encryption scheme for cloud chat n             *)
+(*                                                                            *)
+(*    https://core.telegram.org/mtproto/description                           *)
+(*                                                                            *)
+(******************************************************************************)
+
+(* fpk(PubKey): HashValue *)
+(* keyID(SharedKey): HashValue *)
+(* encodeRequestDHParams(Plaintext, PubKey): Ciphertext *)
+(* decodeRequestDHParams(Ciphertext, PrivKey): Plaintext *)
+(* encodeAuthorizationMsg(Plaintext, SharedKey, Nonce): Ciphertext *)
+(* decodeAuthorizatioMsg(Ciphertext, SharedKey, Nonce): Plaintext *)
+(* hashNk(Nonce, AuthKey): HashValue *)
+
+
+(******************************************************************************)
+(* Decomposition into prime factors.                                          *)
+(*                                                                            *)
+(* This is used only for proof-of-work, a measure against DoS, which we do    *)
+(* not include in our threat model. This definition is reported here for the  *)
+(* sake of completeness, but it is never used.                                *)
+(******************************************************************************)
+type Prime.
+
+fun mult(Prime, Prime): bitstring.
+
+reduc forall x: Prime, y: Prime;
+  factorise(mult(x,y)) = (x,y).
+
+
+(******************************************************************************)
+(* Messages exchanged during the authorization protocol                       *)
+(******************************************************************************)
+
+const FIXED_NS : Nonce.
+const WEAK_NK  : Nonce.
+
+(* Round 1 *)
+fun NC(Nonce)                           : Message   [data]. (* Client -> Server *)
+fun NS(Nonce, Nonce, HashValue)         : Message   [data]. (* Server -> Client *)
+
+(* Round 2 *)
+fun REQDH(Nonce, Nonce, Ciphertext)     : Message   [data]. (* Client -> Server *)
+fun DH   (Nonce, Nonce, Ciphertext)     : Message   [data]. (* Server -> Client *)
+
+(* Round 3 *)
+fun ENDH(Nonce, Nonce, Ciphertext)      : Message   [data]. (* Client -> Server *)
+fun ACK (Nonce, Nonce, HashValue)       : Message   [data]. (* Server -> Client *)
+
+(* Constructors for the encrypted portions of the messages *)
+fun D1(Nonce, Nonce, Nonce)             : Plaintext [data]. (* encData1 *)
+fun AN(Nonce, Nonce, Modulus, G, G)     : Plaintext [data]. (* encAnswer *)
+fun D2(Nonce, Nonce, G)                 : Plaintext [data]. (* encData2 *)
+
+
+(******************************************************************************)
+(* Events                                                                     *)
+(******************************************************************************)
+
+(*
+ * ClientStartsSession(A, S, nc):
+ *
+ * "(Honest) client A starts a run of the authorization protocol with server S
+ * proposing a random nonce nc."
+ *)
+event ClientStartsSession(Principal, Principal, Nonce).
+
+(*
+ * ClientGetsServerPublicKey(A, S, k):
+ *
+ * "Client A has obtained public key k corresponding to the key fingerprint
+ * sent by server S."
+ *)
+event ClientGetsServerPublicKey(Principal, Principal, PubKey).
+
+(*
+ * ClientUsesPredictableNk(b):
+ *
+ * "The client (b ? 'generates': 'does not generate') a predictable secret
+ * nonce nk."
+ *)
+event ClientUsesPredictableNk(bool).
+
+(*
+ * ClientRequestsDHParameters(A, S, nc, ns, nk):
+ *
+ * "Client A requests DH parameters to server S by sending o secret nonce nk in
+ * the session identified by (nc,ns)."
+ *)
+event ClientRequestsDHParameters(Principal, Principal, Nonce, Nonce, Nonce).
+
+(*
+ * ClientReceivesDHParameters(A, S, nc, ns, nk, p, g, g_s):
+ *
+ * "Client A has received DH parameters (p,g) and the server's half key g_s
+ * from server S in the session identified by (nc,ns) for which the client has
+ * generated secret nonce nk."
+ *)
+event ClientReceivesDHParameters(Principal, Principal, Nonce, Nonce, Nonce, Modulus, G, G).
+
+(*
+ * ClientChecksDHParameters(b):
+ *
+ * "The client (b ? 'validates' : 'does not validate') the received DH
+ * parameters."
+ *)
+event ClientChecksDHParameters(bool).
+
+(*
+ * ClientAcceptsDHParameters(A, S, nc, ns, nk, p, g, g_s):
+ *
+ * "Client A has accepted the DH parameters (p,g) received from server S in
+ * session (nc,ns) for which the client has generated secret nonce nk and
+ * received the server's half key g_s."
+ *)
+event ClientAcceptsDHParameters(Principal, Principal, Nonce, Nonce, Nonce, Modulus, G, G).
+
+(*
+ * ClientEndsDHExchange(A, S, nc, ns, nk, p, g, g_s, g_a, k):
+ *
+ * "Client A completes the DH exchange with server S in session (nc,ns) for
+ * which A has generated the secret nonce nk and has received DH paramters
+ * (p,g) and half-key g_s by computing the authorization key k and by sending
+ * its half key g_a to the server."
+ *)
+event ClientEndsDHExchange(Principal, Principal, Nonce, Nonce, Nonce, Modulus, G, G, G, AuthKey).
+
+(*
+ * ClientAcceptsAuthKey(A, S, nc, ns, k):
+ *
+ * "Client A has negotiated the authorization key k with server S in session
+ * (nc,ns)."
+ *)
+event ClientAcceptsAuthKey(Principal, Principal, Nonce, Nonce, AuthKey).
+
+(*
+ * ClientReceivesAck(A, S, nc, ns):
+ *
+ * "Client A has received an acknowledgment from the server S for the
+ * authorization key negotiated in session (nc,ns)."
+ *)
+event ClientReceivesAck(Principal, Principal, Nonce, Nonce).
+
+(*
+ * ServerReceivesRequest(S, nc):
+ *
+ * "Server S has received a request to start a run of the authorization
+ * protocol with client nonce nc."
+ *)
+event ServerReceivesRequest(Principal, Nonce).
+
+(*
+ * ServerNonceIsRandom(p, ns, b):
+ *
+ * "The nonce ns generated by server's instance p (b ? 'is' : 'is not') (truly)
+ * random."
+ *)
+event ServerNonceIsRandom(ProcessID, Nonce, bool).
+
+(*
+ * ServerUsesFixedNonce(S, b):
+ *
+ * "Server S (b ? 'incorrectly uses a fixed nonce' : 'correctly generates a
+ * random nonce').
+ *)
+event ServerUsesFixedNonce(Principal, bool).
+
+(*
+ * ServerAcceptsClient(S, nc, ns, nk):
+ *
+ * "Server S has accepted a request to generate an authorization key in session
+ * (nc,ns), for a client who has sent a secret nonce nk."
+ *)
+event ServerAcceptsClient(Principal, Nonce, Nonce, Nonce).
+
+(*
+ * ServerSendsDHParameters(S, nc, ns, nk, p, g, g_s):
+ *
+ * "Server S sends DH parameters (p,g) and its half-key g_s to a client who has
+ * started session (nc,ns) and sent secret nonce nk."
+ *)
+event ServerSendsDHParameters(Principal, Nonce, Nonce, Nonce, Modulus, G, G).
+
+(*
+ * ServerEndsDHExchange(S, nc, ns, nk, p, g, g_a, k).
+ *
+ * "Server S completes the DH exchange with parameters (p,g) in session (nc,ns)
+ * for which a client has generated the secret nonce nk and the half-key g_a by
+ * computing the authorization key k.
+ *)
+event ServerEndsDHExchange(Principal, Nonce, Nonce, Nonce, Modulus, G, G, AuthKey).
+
+(*
+ * ServerAcceptsAuthKey(S, nc, ns, k):
+ *
+ * "Server S has negotiated the authorization key k with a client in session
+ * (nc,ns)."
+ *)
+event ServerAcceptsAuthKey(Principal, Nonce, Nonce, AuthKey).
+
+(*
+ * ServerSendsAck(S, nc, ns, nk):
+ *
+ * "Server S sends an acknowledgment to a client in session (nc,ns) for which
+ * the client has generated secret nonce nk."
+ *)
+event ServerSendsAck(Principal, Nonce, Nonce, Nonce).
+
+(*
+ * ForgedServerIdentity(S):
+ *
+ * "The attacker associates its own private key to server's identity S."
+ *)
+event ForgedServerIdentity(Principal).
+
+(*
+ * CompromisedRSAKey(k):
+ *
+ * "The attacker gains knowledge of the server's private key k."
+ *)
+event CompromisedRSAKey(PrivKey).
+
+(*
+ * CompromisedNonce(nk):
+ *
+ * "The attacker gains knowledge of the client's secret nonce nk."
+ *)
+event CompromisedNonce(Nonce).
+
+(*
+ * PostCompromisedRSAKey(k):
+ *
+ * "The attacker gains knowledge of the server's private key k after the
+ * authorization protocol has been carried out completely."
+ *)
+event PostCompromisedRSAKey(PrivKey).
+
+(*
+ * PostCompromisedNonce(nk):
+ *
+ * "The attacker gains knowledge of the client's secret nonce nk after the
+ * authorization protocol has been carried out completely."
+ *)
+event PostCompromisedNonce(Nonce).
+
+(*
+ * PostCompromisedAuthKey(k):
+ *
+ * " The attacker gains knowledge of the authorization key k after the
+ * authorization protocol has been carried out completely."
+ *)
+event PostCompromisedAuthKey(AuthKey).
+
+
+(******************************************************************************)
+(* Private channels.                                                          *)
+(*                                                                            *)
+(* These are used to pass information to processes that might leak            *)
+(* information, or to store shared state among processes.                     *)
+(******************************************************************************)
+free io_ns:   channel [private].
+free io_nk:   channel [private].
+
+(*
+ * Records the secret nonces generated by the client. This table may be used by
+ * a process to compromise such nonces.
+ *)
+table SecretNonceTable(Nonce).
+
+(*
+ * Stores the Diffie-Hellman parameters generated by the server.
+ *)
+table DiffieHellmanParametersTable(Modulus, G).
+
+
+(******************************************************************************)
+(* Process macros for client and server                                       *)
+(******************************************************************************)
+
+(*
+ * Telegram client
+ *
+ * server: server's identity (e.g., IP address)
+ *)
+let ClientAuth(server: Principal, allowWeakDH: bool) =
+  in(io, X: Principal);
+  let cUser = choosePrincipal(X, Alice, Bob) in
+
+  (* 1. The client initiates a session to negotiate an authorization key. *)
+  new nc: Nonce;
+
+  event ClientStartsSession(cUser, server, nc);
+
+  out(io, NC(nc));
+
+  (* 3. *)
+  in(io, NS(=nc, ns, fp));
+
+  get RSAPublicKeyTable(=server, pks, =fp) in
+
+  event ClientGetsServerPublicKey(cUser, server, pks);
+
+  (* 4. Start of DH exchange *)
+
+  (*
+   * Generate a fresh secret nonce and privately send it (through a table) to a
+   * parallel process LeakNk(), which might subsequently leak it. By using a
+   * (private) table and a parallel process, we can model an adversary gaining
+   * knowledge of nk during the execution of the protocol.
+   *)
+  new nk: Nonce;
+  (* in(io_nk, nk: Nonce); *)
+  insert SecretNonceTable(nk);
+
+  (* event ClientUsesPredictableNk(nk = WEAK_NK); *)
+
+  let encData1 = encodeRequestDHParams(D1(nc, ns, nk), pks) in
+
+  event ClientRequestsDHParameters(cUser, server, nc, ns, nk);
+
+  out(io, REQDH(nc, ns, encData1));
+
+  (* 6 *)
+  in(io, DH(=nc, =ns, encAnswer: Ciphertext));
+
+  let AN(=nc, =ns, p, g, g_a) = decodeAuthorizatioMsg(encAnswer, ns, nk) in
+
+  event ClientReceivesDHParameters(cUser, server, nc, ns, nk, p, g, g_a);
+
+  (*
+   * Allow the process to continue only if the Diffie-Hellman parameters are good,
+   * or we have explicitly allowed weak parameters.
+   *)
+  let unused = continue_if(allowWeakDH || (p <> WEAK && g <> BAD && g_a <> BAD)) in
+
+  (*
+   * A broken client might accept DH parameters unconditionally. The following
+   * event allows us to test whether the client is running the protocol with
+   * bad parameters (in which case it is assumed that it has not checked them)
+   * or with strong parameters (in which case it is assumed that it has checked
+   * them).
+   *)
+  event ClientChecksDHParameters(p <> WEAK && g <> BAD && g_a <> BAD);
+  event ClientAcceptsDHParameters(cUser, server, nc, ns, nk, p, g, g_a);
+
+  (* 7 *)
+  new b: Z;
+  let authKey = group2auth(dhExp(p, g_a, b)) in
+  let g_b = dhExp(p, g, b) in
+
+  (* 8 *)
+  let encData2 = encodeAuthorizationMsg(D2(nc, ns, g_b), ns, nk) in
+
+  event ClientEndsDHExchange(cUser, server, nc, ns, nk, p, g, g_a, g_b, authKey);
+  event ClientAcceptsAuthKey(cUser, server, nc, ns, authKey);
+
+  out(io, ENDH(nc, ns, encData2));
+
+  (* DH exchange completed, waiting for acknowledgment from the server *)
+  in(io, ACK(=nc, =ns, =hashNk(nk, authKey)));
+
+  event ClientReceivesAck(cUser, server, nc, ns);
+
+  (* Protocol ends here. The following is for testing queries *)
+
+  (* Store the authKey for use by the other protocols *)
+  insert AuthKeyClientTable(cUser, server, authKey);
+
+  (*
+   * To test the secrecy of nk in some scenarios we assign its value of a free
+   * name, then test the secrecy of the free name.
+   *)
+  let secretNk = nk in
+  0.
+
+(*
+ * Telegram server
+ *
+ * server: server's identity (e.g., IP address).
+ *)
+let ServerAuth(server: Principal) =
+  (*
+   * The following fresh name is used only inside events, to distinguish
+   * different copies of this process.
+   *)
+  new sPID: ProcessID;
+
+  get RSAServerKeyTable(=server, sks, pks) in
+
+  (*
+   * Get DH parameters from one of two parallel processes, one that generates
+   * good values, and another one that generates bad values.
+   *)
+  get DiffieHellmanParametersTable(p,g) in
+
+  (* 2 *)
+  in(io, NC(nc));
+
+  event ServerReceivesRequest(server, nc);
+
+  (*
+   * Similarly to DH parameters, the generation of the server nonce is
+   * delegated to two parallel processes, one that generates a random nonce and
+   * another one that outputs a fixed value. This allows us to model a server
+   * that reuses the same nonce in different sessions.
+   *)
+  in(io_ns, ns: Nonce);
+
+  event ServerNonceIsRandom(sPID, ns, ns <> FIXED_NS);
+  event ServerUsesFixedNonce(server, ns = FIXED_NS);
+
+  out(io, NS(nc,ns, fpk(pks)));
+
+  (* 5 *)
+  in(io, REQDH(=nc, =ns, encData1: Ciphertext));
+  let D1(=nc, =ns, nk: Nonce) = decodeRequestDHParams(encData1, sks) in
+
+  event ServerAcceptsClient(server, nc, ns, nk);
+
+  new a: Z;
+  let g_a        = dhExp(p, g, a) in
+  let encAnswer  = encodeAuthorizationMsg(AN(nc, ns, p, g, g_a), ns, nk) in
+
+  event ServerSendsDHParameters(server, nc, ns, nk, p, g, g_a);
+
+  out(io, DH(nc, ns, encAnswer));
+
+  (* 9. DH exchange complete *)
+  in(io, ENDH(=nc, =ns, encData2: Ciphertext));
+  let D2(=nc, =ns, g_b) = decodeAuthorizatioMsg(encData2, ns, nk) in
+  let authKey = group2auth(dhExp(p, g_b, a)) in
+
+  event ServerEndsDHExchange(server, nc, ns, nk, p, g, g_a, authKey);
+  event ServerAcceptsAuthKey(server, nc, ns, authKey);
+  event ServerSendsAck(server, nc, ns, nk);
+
+  out(io, ACK(nc, ns, hashNk(nk, authKey)));
+
+  (* Protocol ends here. The following is for testing queries. *)
+
+  (* Store the authKey for use by the other protocols *)
+  insert AuthKeyServerTable(keyID(auth2shared(authKey)), authKey);
+  0.
+
+
+(******************************************************************************)
+(* Auxiliary processes                                                        *)
+(******************************************************************************)
+
+(* Generates a new private/public key pair for the given server *)
+let RegisterRSAKey(server: Principal) =
+  new sk: PrivKey;
+  insert RSAServerKeyTable(server, sk, pk(sk)); (* Accessed only by the server *)
+  insert RSAPublicKeyTable(server, pk(sk), fpk(pk(sk))); (* Used by the client *)
+  out(io, pk(sk)); (* Publish the public key *)
+  out(io, server);  (* Make the server's identity public *)
+  0.
+
+(*
+ * Allows the attacker to impersonate the server by registering a private key
+ * associated to the server's identity (which is public—see above).
+ *)
+let ForgeServerIdentity() =
+  in(io, (server: Principal, sk: PrivKey));
+  event ForgedServerIdentity(server);
+  insert RSAServerKeyTable(server, sk, pk(sk));
+  insert RSAPublicKeyTable(server, pk(sk), fpk(pk(sk))).
+
+(* Leaks a server's private key *)
+let LeakRSAKey() =
+  get RSAServerKeyTable(sID_unused, sk, pk_unused) in
+  event CompromisedRSAKey(sk);
+  out(io, sk).
+
+(* Reveals the private key of the server after the protocol has been run *)
+let PostCompromiseRSAKey() =
+  phase 1;
+  get RSAServerKeyTable(sID_unused, sk, pk_unused) in
+  event PostCompromisedRSAKey(sk);
+  out(io, sk).
+
+(* Privately receives a secret nonce from a client and leaks it *)
+let LeakNk() =
+  get SecretNonceTable(nk: Nonce) in
+  event CompromisedNonce(nk);
+  out(io, nk).
+
+(* Reveals the secret nonce generated by the client after the protocol has been run *)
+let PostCompromiseNk() =
+  get SecretNonceTable(nk: Nonce) in
+  phase 1;
+  event PostCompromisedNonce(nk);
+  out(io, nk).
+
+(* Reveals an authorization key after the protocol has been run *)
+let PostCompromiseAuthKey() =
+  phase 1;
+  get AuthKeyServerTable(fp_unused, authKey) in
+  event PostCompromisedAuthKey(authKey);
+  out(io, authKey).
+
+(*
+ * We define the following two processes, instead of simply letting the
+ * attacker send ns to the server, because that allows us to test queries in
+ * scenarios where only random nonces are used, only the same fixed value is
+ * used, or both are used (by simply choosing which of the following two
+ * processes to run in parallel with the server). Note that using only
+ * GenRandomServerNonce() does not prevent the attacker to intercept messages
+ * and change a good nonce into FIXED_NS.
+ *)
+let GenRandomServerNonce() =
+  new ns: Nonce;
+  out(io_ns, ns).
+
+let GenFixedServerNonce() =
+  out(io_ns, FIXED_NS).
+
+(*
+ * Ditto for Diffie-Hellman parameters.
+ *)
+let GenGoodDHParameters() =
+  insert DiffieHellmanParametersTable(STRONG,GOOD).
+
+let GenBadDHParameters() =
+  new g: G;
+  insert DiffieHellmanParametersTable(WEAK, g);
+  insert DiffieHellmanParametersTable(STRONG, BAD).
+
+(*
+ * The following two processes are not used. LeakNk() provides the attacker
+ * with essentially the same knowledge as GenPredictableNk() (i.e., the
+ * client's secret nonce).
+ *)
+let GenRandomNk() =
+  new nk: Nonce;
+  out(io_nk, nk).
+
+let GenPredictableNk() =
+  out(io_nk, WEAK_NK).
+
+(*
+ * Allow the attacker to register an authorization key for itself with a
+ * server.
+ *)
+let RegisterAuthKey() =
+  in(io, (X: Principal, k: AuthKey));
+  if X <> Alice && X <> Bob then
+    insert AuthKeyServerTable(keyID(auth2shared(k)), k);
+    0.
+

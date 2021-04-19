@@ -1,0 +1,125 @@
+(*
+ * MTProto 2.0: Cloud chats
+ *
+ * Model for cloud chat messages, i.e., messages exchanged between a client and
+ * Telegram's server, encrypted using a long-term shared key (aka,
+ * authorization key).
+ *
+ * See: https://core.telegram.org/mtproto/description
+ *)
+
+(******************************************************************************)
+(* "Abstract" cryptographic primitives                                        *)
+(*                                                                            *)
+(* NOTE: These MUST be defined somewhere before this point. They are          *)
+(* not defined here so that the choice of a model for MTProto's encryption    *)
+(* scheme can be done independently, without touching this file.              *)
+(*                                                                            *)
+(* The reference for MTProto's encryption scheme for cloud chat n             *)
+(*                                                                            *)
+(*    https://core.telegram.org/mtproto/description                           *)
+(*                                                                            *)
+(******************************************************************************)
+
+(* encodeCloudChatMsg(Plaintext, AuthKey): Message *)
+(* clientDecodeCloudChatMsg(Message, AuthKey): Plaintext *)
+(* serverDecodeCloudChatMsg(Message): Plaintext *)
+
+
+(******************************************************************************)
+(* Private data                                                               *)
+(******************************************************************************)
+free secretAuthMsg1: bitstring [private].
+free secretAuthMsg2: bitstring [private].
+free secretAuthMsg3: bitstring [private].
+
+
+(******************************************************************************)
+(* Events                                                                     *)
+(******************************************************************************)
+event ClientSendsCloudMessage                        (Principal, Nonce, bitstring, AuthKey).
+event ClientReceivesCloudMessage                     (Principal, Nonce, bitstring, AuthKey).
+event ClientSendsCloudMessageAfterCompromisedNonce   (Principal, Nonce, bitstring, AuthKey).
+
+event ServerReceivesCloudMessage                     (Principal, Nonce, bitstring, AuthKey).
+event ServerSendsCloudMessage                        (Principal, Nonce, bitstring, AuthKey).
+event ServerReceivesCloudMessageAfterCompromisedNonce(Principal, Nonce, bitstring, AuthKey).
+
+
+(******************************************************************************)
+(* Helper functions                                                           *)
+(******************************************************************************)
+
+(*
+ * Constants used to distinguish client->server messages from server->client messages.
+ *)
+const CLIENT: bitstring.
+const SERVER: bitstring.
+
+(* Constructor for the encrypted part of a cloud-chat message *)
+fun CC(bitstring, Nonce, bitstring): Plaintext [data].
+
+(* Constructor for a message *)
+fun MSG(Message): Message [data].
+
+
+(*
+ * Telegram client
+ *
+ * server: server's identity
+ *)
+let ClientCloudChat(server: Principal) =
+  in(io, X: Principal);
+  let cUser = choosePrincipal(X, Alice, Bob) in
+
+  (* Retrieve the long-term shared key between client and server *)
+  get AuthKeyClientTable(=cUser, =server, authKey) in
+
+  (*
+   * According to Telegram's specification, a random 64-bit number generated
+   * by the client is used to distinguish between individual sessions. This
+   * session id is sent along with the encrypted message.
+   *)
+  new sessionID: Nonce;
+
+  event ClientSendsCloudMessage(server, sessionID, secretAuthMsg1, authKey);
+
+  let msg1 = CC(CLIENT, sessionID, secretAuthMsg1) in
+  out(io, MSG(encodeCloudChatMsg(msg1, authKey)));
+
+  in(io, MSG(msg2));
+  let CC(=SERVER, =sessionID, plaintext2) = clientDecodeCloudChatMsg(msg2, authKey) in
+
+  event ClientReceivesCloudMessage(server, sessionID, plaintext2, authKey);
+
+  phase 1; (* The secret nk is post-compromised in the client process in phase 1 *)
+  event ClientSendsCloudMessageAfterCompromisedNonce(server, sessionID, secretAuthMsg3, authKey);
+
+  let msg3 = CC(CLIENT, sessionID, secretAuthMsg3) in
+  out(io, MSG(encodeCloudChatMsg(msg3, authKey)));
+  0.
+
+
+(*
+ * Telegram server
+ *
+ * server: server's identity
+ *)
+let ServerCloudChat(server: Principal) =
+
+  in(io, MSG(msg1));
+  let (CC(=CLIENT, sessionID, plaintext1), authKey: AuthKey) = serverDecodeCloudChatMsg(msg1) in
+
+  event ServerReceivesCloudMessage(server, sessionID, plaintext1, authKey);
+  event ServerSendsCloudMessage(server, sessionID, secretAuthMsg2, authKey);
+
+  let msg2 = CC(SERVER, sessionID, secretAuthMsg2) in
+  out(io, MSG(encodeCloudChatMsg(msg2, authKey)));
+
+  phase 1; (* The secret nk is post-compromised in the client process in phase 1 *)
+  in(io, MSG(msg3));
+  let (CC(=CLIENT, =sessionID, plaintext3), =authKey) = serverDecodeCloudChatMsg(msg3) in
+
+  event ServerReceivesCloudMessageAfterCompromisedNonce(server, sessionID, plaintext3, authKey);
+  0.
+

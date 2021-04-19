@@ -1,0 +1,23 @@
+(* Compute the fingerprint of a server's public key *)
+letfun fpk(pk: PubKey) =
+  hashIdeal(pk2bit(pk)).
+
+(* Ephemeral AES key and IV creation *)
+fun genKey(Nonce, Nonce): SharedKey.
+fun genIV (Nonce, Nonce): Nonce.
+
+letfun encodeRequestDHParams(m: Plaintext, pk: PubKey) =
+  RSA_enc(m, pk).
+
+letfun decodeRequestDHParams(c: Ciphertext, sk: PrivKey) =
+  RSA_dec(c, sk).
+
+letfun encodeAuthorizationMsg(m: Plaintext, ns: Nonce, nk: Nonce) =
+  AES_ige_enc(m, genKey(ns,nk), genIV(ns,nk)).
+
+letfun decodeAuthorizatioMsg(c: Ciphertext, ns: Nonce, nk: Nonce) =
+  AES_ige_dec(c, genKey(ns,nk), genIV(ns,nk)).
+
+letfun hashNk(nk: Nonce, authKey: AuthKey) =
+  hashIdeal(nonce2bit(nk)).
+

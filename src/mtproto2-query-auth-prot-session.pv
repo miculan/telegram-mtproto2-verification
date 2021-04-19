@@ -1,0 +1,39 @@
+(*
+ * MTProto 2.0: Creating an authorization key.
+ *
+ * Expected time to run this script: ~45s
+ *)
+
+(*
+ * If client and server end up accepting the same key, then they do so in the
+ * same session, unless something bad happens.
+ *)
+query cID: Principal, sID: Principal, nc: Nonce, ns: Nonce, nc': Nonce, ns': Nonce, nk: Nonce, k: AuthKey, sk: PrivKey;
+  event(ServerAcceptsAuthKey(sID, nc, ns, k)) && event(ClientAcceptsAuthKey(cID, sID, nc', ns', k))
+  ==> (nc = nc' && ns = ns')
+  ||  event(ClientChecksDHParameters(false))
+  ||  event(CompromisedNonce(nk))
+  ||  event(CompromisedRSAKey(sk))
+  ||  event(ForgedServerIdentity(sID)).
+(* ✔︎ Expected result: true *)
+
+
+(* Main *)
+
+process
+  (0
+    | !GenGoodDHParameters()
+    | !GenBadDHParameters()
+    | !GenRandomServerNonce()
+    | !GenFixedServerNonce()
+    | !RegisterRSAKey(Server)
+    | !ServerAuth(Server)
+    | !ClientAuth(Server, true)
+    | !ForgeServerIdentity()
+    | !LeakRSAKey()
+    | !PostCompromiseRSAKey()
+    | !LeakNk()
+    | !PostCompromiseNk()
+    | !PostCompromiseAuthKey()
+  )
+

@@ -1,0 +1,159 @@
+(*
+ * MTProto 2.0: Rekeying
+ *
+ * Model for the protocol used for updating the session keys of secret chats.
+ *
+ * See: https://core.telegram.org/api/end-to-end/pfs
+ *
+ * Expected time to run this script: ~4m30s
+ *)
+
+(*
+ * If an (honest) initiator I accepts a new key k in a rekeying session i with
+ * another party R, and an (honest) responder R' accepts the same key k in the
+ * same session i with I', then there should be only two parties involved
+ * (ideally, I = I' and R = R'). In this query, we check that at least one
+ * entity appears in both events (we do not even impose that such entity acts
+ * as the initiator at one side and as the responder at the other). Despite
+ * this weak requirement, the query turns out to be false, i.e., there is a
+ * trace showing that I, I', R, and R' may be all different.
+ *)
+query i, i': ChatID, I, I', R, R': Principal, k: SessionKey;
+  event(InitiatorHasNegotiatedNewKey   (i, I,  R,  k))
+  && event(ResponderHasNegotiatedNewKey(i, I', R', k))
+  ==> I = I' || I = R' || R = I' || R = R'
+  || k = group2sess(BAD).
+(* ✖︎ Expected result: false *)
+
+(*
+ * NOTE: this does not hold, because an evil client E might mount the following attack.
+ * When A starts a rekeying session with E, E starts a different rekeying session with B.
+ *
+ * A -> E: g^a
+ * E -> B: g^a
+ * B -> E: g^b
+ * E -> A: g^b
+ *
+ * The end result is that A and B share the same new key (unknown to E), but they
+ * believe that they share it with E.
+ *
+ * NOTE: to be able to disprove the query, the trace uses two dishonest parties
+ * E, E' (communicating offline between themselves) instead of one. But the
+ * idea is the same.
+ *)
+
+(*
+ * If an (honest) initiator I accepts a new key k with Bob in some session, and
+ * an (honest) responder R accepts the same key k with Alice in some other
+ * session, then the session is the same, the initiator is Alice and the
+ * responder is Bob.
+ *)
+query i, i': ChatID, I, R: Principal, k: SessionKey;
+  event(InitiatorHasNegotiatedNewKey   (i,  I,     Bob, k))
+  && event(ResponderHasNegotiatedNewKey(i', Alice, R,   k))
+  ==> i = i' && I = Alice && R = Bob.
+(* ✔︎ Expected result: true *)
+(*
+ * NOTE: we can expect authentication in the rekeying protocol only if the
+ * clients are all honest (here and elsewhere, Alice and Bob are always
+ * honest).
+ *)
+
+(*
+ * If an (honest) responder R ends up accepting a new session key k after a
+ * rekeying session i with Alice, then it was Alice who started session i and
+ * Alice also has computed the new key k, unless R himself started session i
+ * with Alice and his messages were reflected back by the attacker in a
+ * parallel session having the same chat ID.
+ *)
+query i: ChatID, R: Principal, k: SessionKey, m: bitstring;
+  inj-event(ResponderHasNegotiatedNewKey    (i, Alice, R,     k))
+  ==> inj-event(InitiatorHasNegotiatedNewKey(i, Alice, R,     k))
+  ||  inj-event(InitiatorHasNegotiatedNewKey(i, R,     Alice, k)).
+(* ✔︎ Expected result: true *)
+(* NOTE: see note in the query below *)
+
+(*
+ * If an (honest) responder R receives a message from Alice after renegotiating
+ * the session key, then it was Alice who sent it, unless R itself sent a
+ * message meant for Alice, which was reflected to R by the attacker in a
+ * parallel session having the same chat ID.
+ *
+ * NOTE: the free name Alice here is used to ensure that the considered session
+ * is between honest parties (if a variable X were used instead of Alice, then
+ * X might denote the attacker—who can engage in a session with an honest
+ * party—and of course the correspondence would not hold, because the message
+ * could be sent by the attacker, who does not execute any event). By symmetry,
+ * the same query is true for Bob.
+ *)
+query iPID, rPID: ProcessID, i: ChatID, R: Principal, k: SessionKey, m: bitstring;
+  inj-event(ResponderReceivesMsgWithNewKey (rPID, i, Alice, R,     k, m))
+  ==> inj-event(InitiatorSendsMsgWithNewKey(iPID, i, Alice, R,     k, m))
+  ||  inj-event(InitiatorSendsMsgWithNewKey(iPID, i, R,     Alice, k, m)).
+(* ✔︎ Expected result: true *)
+
+(*
+ * If an (honest) initiator I receives a message from Alice after renegotiating
+ * the session key, then it was Alice who sent it, unless I itself sent a
+ * message meant for Alice, which was reflected to I by the attacker in a
+ * parallel session having the same chat ID.
+ *)
+query iPID, rPID: ProcessID, i: ChatID, I, R: Principal, k: SessionKey, m: bitstring;
+  inj-event(InitiatorReceivesMsgWithNewKey (iPID, i, I,     Alice, k, m))
+  ==> inj-event(ResponderSendsMsgWithNewKey(rPID, i, I,     Alice, k, m))
+  ||  inj-event(ResponderSendsMsgWithNewKey(rPID, i, Alice, I,     k, m)).
+(* ✔︎ Expected result: true *)
+
+(*
+ * If Alice sends a message m encrypted with session key k to R in chat session i,
+ * and Bob receives message m encrypted with k from R in session i,
+ * then I must be Alice and R must be Bob.
+ *)
+query iPID, rPID: ProcessID, i: ChatID, I, R: Principal, k: SessionKey, m: bitstring;
+  event(InitiatorSendsMsgWithNewKey      (rPID, i, Alice, R,   k, m))
+  && event(ResponderReceivesMsgWithNewKey(iPID, i, I,     Bob, k, m))
+  ==> (I = Alice && R = Bob) || k = group2sess(BAD).
+(* ✖︎ Expected result: false *)
+(*
+ * NOTE: this is a consequence of the attack mentioned at the beginning:
+ *
+ * 1. Alice generates session i and sends message {m}_k to Eve, with which
+ *    Alice believes she is sharing a key k.
+ * 2. Eve reuses i in a new session with Bob, and sends {m}_k to Bob: Bob
+ *    accepts the message because he believes he shares k with Eve.
+ *
+ * Eve does not know m: the issue is the wrong expectations of Alice and Bob,
+ * who believe they are talking to Eve, while they are talking to each other.
+ *)
+
+(* Ditto with exchanged roles *)
+query iPID, rPID: ProcessID, i: ChatID, I, R: Principal, k: SessionKey, m: bitstring;
+  event(ResponderSendsMsgWithNewKey      (rPID, i, I,     Bob, k, m))
+  && event(InitiatorReceivesMsgWithNewKey(iPID, i, Alice, R,   k, m))
+  ==> (I = Alice && R = Bob) || k = group2sess(BAD).
+(* ✖︎ Expected result: false *)
+
+
+(* Main *)
+
+let Init() =
+  new k: SessionKey;
+  new a: Z;
+  new b: Z;
+  insert SecretChatClientTable(Alice, Bob, STRONG, GOOD, a, k);
+  insert SecretChatClientTable(Bob, Alice, STRONG, GOOD, b, k);
+  new authKey1: AuthKey;
+  new authKey2: AuthKey;
+  insert AuthKeyClientTable(Alice, Server, authKey1);
+  insert AuthKeyClientTable(Bob, Server, authKey2);
+  0.
+
+
+process
+  (0
+    | !Init()
+    | !RegisterSessionKey()
+    | !RekeyingInitiator(Server)
+    | !RekeyingResponder(Server)
+  )
+

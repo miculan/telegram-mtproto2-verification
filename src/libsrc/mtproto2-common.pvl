@@ -1,0 +1,160 @@
+(******************************************************************************)
+(* Common types                                                               *)
+(******************************************************************************)
+type Principal.      (* A party in a communication *)
+type Message.        (* Generic (composite) message, in general ciphertext plus additional data *)
+type Nonce.          (* Values (that should be) used only once *)
+type Plaintext.      (* Input for encryption primitives *)
+type Ciphertext.     (* Output of encryption primitives *)
+type PrivKey.        (* RSA private keys *)
+type PubKey.         (* RSA public keys *)
+type SharedKey.      (* Any shared key *)
+type AuthKey.        (* Authorization keys (shared keys for client-server communication) *)
+type SessionKey.     (* Shared symmetric keys used in e2e-encrypted secret chats *)
+type HashValue.      (* Result of a hash function *)
+type ChatID.         (* Chat session IDs *)
+type ProcessID.      (* Process IDs are used exclusively to mark events. )
+
+(* Type conversion functions *)
+fun auth2shared(AuthKey)    : SharedKey  [typeConverter].
+fun sess2shared(SessionKey) : SharedKey  [typeConverter].
+fun shared2auth(SharedKey)  : AuthKey    [typeConverter].
+fun shared2bit(SharedKey)   : bitstring  [typeConverter].
+fun sess2bit(SessionKey)    : bitstring  [typeConverter].
+fun nonce2bit(Nonce)        : bitstring  [typeConverter].
+fun pk2bit(PubKey)          : bitstring  [typeConverter].
+
+
+(******************************************************************************)
+(* Free names                                                                 *)
+(******************************************************************************)
+free io       : channel.
+free Alice    : Principal. (* An honest client *)
+free Bob      : Principal. (* Another honest client *)
+free Server   : Principal. (* Telegram server *)
+
+
+(******************************************************************************)
+(* Diffie-Hellman with small/bad subgroup attacks.                            *)
+(* See Bhargavan, Blanchet and Kobeissi, 2017.                                *)
+(******************************************************************************)
+type Modulus.
+type G.       (* Group elements       *)
+type Z.       (* Integers (exponents) *)
+type DHParam.
+
+(* Type conversion functions *)
+fun group2sess(G) : SessionKey [typeConverter].
+fun group2auth(G) : AuthKey    [typeConverter].
+
+const STRONG      : Modulus [data].
+const WEAK        : Modulus [data].
+const BAD         : G       [data].
+const GOOD        : G       [data].
+
+fun dhExpIdeal(G,Z): G.
+
+equation forall x: Z, y: Z;
+  dhExpIdeal(dhExpIdeal(GOOD,x),y) = dhExpIdeal(dhExpIdeal(GOOD,y),x).
+
+(*
+ * Diffie-Hellman exponentiation with weak groups and bad elements.
+ *)
+fun dhExp(Modulus, G, Z): G
+  reduc     forall p: Modulus, a: G, x: Z; dhExp(WEAK,   a,   x) = BAD
+  otherwise forall p: Modulus, a: G, x: Z; dhExp(STRONG, BAD, x) = BAD
+  otherwise forall p: Modulus, a: G, x: Z; dhExp(STRONG, a,   x) = dhExpIdeal(a,x).
+
+(* Some convenience functions *)
+letfun genSessionKey(p: Modulus, g: G, x: Z, y: Z) =
+  group2sess(dhExp(p, dhExp(p, g, x), y)).
+
+letfun genStrongSessionKey(x: Z, y: Z) =
+  group2sess(dhExpIdeal(dhExpIdeal(GOOD, x), y)).
+
+letfun genWeakSessionKey() =
+  group2sess(BAD).
+
+
+(******************************************************************************)
+(* Hash functions, including functions with collisions.                       *)
+(******************************************************************************)
+type HashAlg.
+
+const WEAK_HASH  : HashAlg   [data].
+const COLLISION  : HashValue [data].
+
+fun hashIdeal(bitstring): HashValue.
+
+(*
+ * Hash function with collisions.
+ *)
+fun hash(HashAlg, bitstring): HashValue
+  reduc     forall x: bitstring; hash(WEAK_HASH, x) = COLLISION
+  otherwise forall x: bitstring, h: HashAlg; hash(h,x) = hashIdeal(x).
+
+
+(******************************************************************************)
+(* Tables                                                                     *)
+(******************************************************************************)
+
+(*
+ * Stores the private/public key pairs of servers (accessible only by
+ * servers).
+ *)
+table RSAServerKeyTable(Principal, PrivKey, PubKey).
+
+(*
+ * Stores the public keys of servers along with their fingerprints. Clients may
+ * use this table to retrieve a specific public key given a key fingerprint.
+ *)
+table RSAPublicKeyTable(Principal, PubKey, HashValue).
+
+(*
+ * Stores a negotiated authorization key between a client and a server for
+ * reuse by the same client in other protocols.
+ *)
+table AuthKeyClientTable(Principal, Principal, AuthKey).
+
+(*
+ * Stores a negotiated authorization key between a client and a server for
+ * reuse by servers in other protocols.
+ *
+ * NOTE: according to Telegram's documentation, servers identify clients by a
+ * 64-bit identifier authKeyID (which uniquely identifies an authorization key
+ * for the server as well as the user), which is a hash computed from the
+ * authorization key. In our model, the server uses this table as the server's
+ * database, allowing the server to determine the authorization key to use to
+ * decrypt a given message from the client.
+ *)
+table AuthKeyServerTable(HashValue, AuthKey).
+
+(*
+ * Stores the information a client knows in a secret chat's protocol.
+ *)
+table SecretChatClientTable(Principal, Principal, Modulus, G, Z, SessionKey).
+
+(*
+ * Stores the information a client knows after re-keying.
+ *)
+table RekeyingClientTable(Principal, Principal, Modulus, G, Z, SessionKey).
+
+
+(******************************************************************************)
+(* Other convenience functions                                                *)
+(******************************************************************************)
+
+(* Returns the public key corresponding to a given private key *)
+fun pk(PrivKey): PubKey.
+
+(* Checks that a principal X is one of Y or Z (otherwise fails) *)
+fun choosePrincipal(Principal, Principal, Principal): Principal
+  reduc forall X: Principal, Y: Principal;
+    choosePrincipal(X,X,Y) = X
+  otherwise forall X: Principal, Y: Principal;
+    choosePrincipal(Y,X,Y) = Y.
+
+(* Fails if its argument is not true *)
+fun continue_if(bool): bool
+  reduc continue_if(true) = true.
+

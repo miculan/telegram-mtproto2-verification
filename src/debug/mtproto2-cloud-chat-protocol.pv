@@ -1,0 +1,54 @@
+query X: Principal, i: Nonce, m: bitstring, k: AuthKey;
+  event(ClientSendsCloudMessage(X, i, m, k)).
+(* ✖︎ Expected result: false *)
+
+query X: Principal, i: Nonce, m: bitstring, k: AuthKey;
+  event(ClientReceivesCloudMessage(X, i, m, k)).
+(* ✖︎ Expected result: false *)
+
+query X: Principal, i: Nonce, m: bitstring, k: AuthKey;
+  event(ClientSendsCloudMessageAfterCompromisedNonce(X, i, m, k)).
+(* ✖︎ Expected result: false *)
+
+query X: Principal, i: Nonce, m: bitstring, k: AuthKey;
+  event(ServerReceivesCloudMessage(X, i, m, k)).
+(* ✖︎ Expected result: false *)
+
+query X: Principal, i: Nonce, m: bitstring, k: AuthKey;
+  event(ServerSendsCloudMessage(X, i, m, k)).
+(* ✖︎ Expected result: false *)
+
+query X: Principal, i: Nonce, m: bitstring, k: AuthKey;
+  event(ServerReceivesCloudMessageAfterCompromisedNonce(X, i, m, k)).
+(* ✖︎ Expected result: false *)
+
+query attacker(secretAuthMsg1).
+(* ✖︎ Expected result: false *)
+
+query attacker(secretAuthMsg2).
+(* ✖︎ Expected result: false *)
+
+query attacker(secretAuthMsg3).
+(* ✖︎ Expected result: false *)
+
+
+(* Main *)
+
+let Init() =
+  new a: Z;
+  new b: Z;
+  let k1 = group2auth(dhExpIdeal(dhExpIdeal(GOOD,a),b)) in
+  let k2 = group2auth(dhExpIdeal(dhExpIdeal(GOOD,b),a)) in
+  insert AuthKeyClientTable(Alice, Server, k1);
+  insert AuthKeyServerTable(keyID(auth2shared(k2)), k2);
+  0.
+
+process
+  (0
+    | Init()
+    | !ClientCloudChat(Server)
+    | !ServerCloudChat(Server)
+    (* No forward secrecy: *)
+    | !PostCompromiseAuthKey()
+  )
+

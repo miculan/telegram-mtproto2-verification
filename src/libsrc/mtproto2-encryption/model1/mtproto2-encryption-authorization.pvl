@@ -1,0 +1,19 @@
+fun fpk(PubKey): HashValue.
+
+fun genKey(Nonce, Nonce): SharedKey.
+
+letfun encodeRequestDHParams(m: Plaintext, pk: PubKey) =
+  aenc(m, pk).
+
+letfun decodeRequestDHParams(c: Ciphertext, sk: PrivKey) =
+  adec(c, sk).
+
+letfun encodeAuthorizationMsg(m: Plaintext, ns: Nonce, nk: Nonce) =
+  senc(m, genKey(ns,nk)).
+
+letfun decodeAuthorizatioMsg(c: Ciphertext, ns: Nonce, nk: Nonce) =
+  sdec(c, genKey(ns,nk)).
+
+letfun hashNk(nk: Nonce, authKey: AuthKey) =
+  hashIdeal(nonce2bit(nk)).
+
