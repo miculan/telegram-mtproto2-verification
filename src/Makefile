@@ -10,7 +10,7 @@ ENC       ?= model2
 LIB        = mtproto2.pvl
 LIBDIR     = ./libsrc
 
-# The order of the library files matter: do not change it!
+# The order of the library files matters: do not change it!
 LIBSRC     = $(LIBDIR)/proverif/cryptoverif.pvl
 LIBSRC    += $(LIBDIR)/mtproto2-common.pvl
 LIBSRC    += $(LIBDIR)/mtproto2-encryption/$(ENC)/mtproto2-encryption-common.pvl
