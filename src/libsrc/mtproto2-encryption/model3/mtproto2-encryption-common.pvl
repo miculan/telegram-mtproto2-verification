@@ -1,0 +1,128 @@
+(******************************************************************************)
+(* MTProto 2.0's encryption scheme: common definitions                        *)
+(******************************************************************************)
+
+type MsgKey. (* 128-bit MACs computed from the message and the shared key *)
+
+(* Constructor for an MTProto message *)
+(* See: https://core.telegram.org/mtproto/description#encrypted-message *)
+fun MTPROTO(HashValue, MsgKey, Ciphertext): Message [data].
+
+(*
+ * In MTProto, this function computes the 64 lower-order bits of the SHA-1 hash
+ * of the input authorization key or session key.
+ *)
+fun keyID(SharedKey): HashValue.
+
+(*
+ * In MTProto 2.0, the message key is computed as the middle 128 bits of the
+ * SHA-256 hash of the concatenation of a fragment of the authorization key
+ * and the plaintext, as follows:
+ *
+ *   msgKey(k,m) := SHA256( k[88+x,120+x) | m | random padding )[8,24)
+ *
+ * where x=0 for messages from client to server and x=8 for messages from
+ * server to client.
+ *)
+fun msgKey(SharedKey, Plaintext): MsgKey.
+
+(*
+ * An ephemeral key and an initialization vector are derived from the
+ * authorization key and the message key through a mix of SHA-256, substring,
+ * and concatenation operations.
+ *)
+fun kdfKey(SharedKey, MsgKey): SharedKey.
+fun kdfIV (SharedKey, MsgKey): Nonce.
+
+letfun fps(k: SessionKey) =
+  hashIdeal(sess2bit(k)).
+
+
+(******************************************************************************)
+(* Asymmetric encryption                                                      *)
+(******************************************************************************)
+
+(*
+ * NOTE: the use of a deterministic model of encryption does not affect the
+ * outcome of the analysis, and it speeds up the verification process
+ * significanty compared to a probabilistic model (~3x slower) or to a model
+ * that includes the SHA-1 of the data as per MTproto2's specification (~15x
+ * slower).
+ *
+ * This is because in ProVerif an equation such as dec(enc(m,k),k)=m
+ * essentially models an authenticated encryption scheme.
+ *
+ * Deterministic vs probabilistic might make a difference if we tested
+ * observational equivalences or equality of ciphertexts (see ProVerif's
+ * manual).
+ *
+ * In MTProto 2.0, asymmetric encryption is used only in the second round of
+ * the authorization protocol, when the client uses it to send the server a
+ * secret nonce nk.
+ *)
+
+(* fun RSA_enc(Plaintext, PubKey): Ciphertext. *)
+
+(* reduc forall m: Plaintext, k: PrivKey; *)
+(*   RSA_dec(RSA_enc(m, pk(k)), k) = m. *)
+
+(* Probabilistic encryption (alternative to the above) *)
+type Coin.
+
+fun internal_RSA_enc(Plaintext, PubKey, Coin): Ciphertext.
+
+reduc forall m: Plaintext, k: PrivKey, r: Coin;
+  RSA_dec(internal_RSA_enc(m,pk(k),r),k) = m.
+
+letfun RSA_enc(m: Plaintext, pk: PubKey) =
+  new r: Coin;
+  internal_RSA_enc(m,pk,r).
+
+
+(******************************************************************************)
+(* Symmetric encryption                                                       *)
+(******************************************************************************)
+
+(*
+ * At the most basic level, all symmetric encryption in MTProto 2.0 is
+ * performed using AES in IGE (Infinite Garble Extension) mode, which
+ * uses the following chaining sequence:
+ *
+ *     yᵢ = Fₖ(xᵢ ⊗ yᵢ₋₁) ⊗ xᵢ₋₁
+ *
+ * For the first output block, IGE requires a pair (x₀,y₀) (corresponding to a
+ * traditional IV). From what we have seen, Telegram's implementation (at least
+ * Telegram Desktop: see https://github.com/telegramdesktop/tdesktop) uses
+ * AES_ige_encrypt() from OpenSSL (now deprecated, btw), which takes a single
+ * IV twice the block size (block size = 16 bytes).
+ *
+ * Modelling the properties of IGE in a symbolic framework is very difficult,
+ * (i.e., complex and computationally demanding), if possible at all. For this
+ * reason, we treat this primitive as perfect, as is usually done in ProVerif.
+ * That means, in particular, that the only way the plaintext can be recovered
+ * is by knowing the encryption key, and the ciphertext is not malleable.
+ *)
+(* expand IND_CPA_INT_CTXT_sym_enc_nonce(AuthKey, Plaintext, Ciphertext, Nonce, AES_ige_enc, AES_ige_dec, injbot, Z, _, _). *)
+
+fun internal_AES_ige_enc(Plaintext, SharedKey, Nonce, Coin): Ciphertext.
+
+(* fun AES_ige_enc(Plaintext, SharedKey, Nonce): Ciphertext. *)
+
+reduc forall m: Plaintext, k: SharedKey, iv: Nonce, r: Coin;
+  AES_ige_dec(internal_AES_ige_enc(m,k,iv,r),k,iv) = m.
+
+letfun AES_ige_enc(m: Plaintext, k: SharedKey, iv: Nonce) =
+  new r: Coin;
+  internal_AES_ige_enc(m, k, iv, r).
+
+(*
+ * One might model malleability using the following reduction (definition
+ * borrowed from cryptoverif.pvl in ProVerif's package).
+ *
+ * TODO: verify the effect of adding this. Is it too strong (does it break the
+ * scheme completely)?
+ *)
+(* reduc forall k: AuthKey, m: bitstring, iv: Nonce, m': bitstring, iv': Nonce; *)
+(*       mal(AES_ige_enc(m,k,iv),m',iv') = AES_ige_dec(m',k,iv'). *)
+
+

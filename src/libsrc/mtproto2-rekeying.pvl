@@ -13,9 +13,11 @@ fun HALFKEYA(ChatID, G)                    : Plaintext [data].
 fun HALFKEYB(ChatID, G, HashValue)         : Plaintext [data].
 fun FPACK   (ChatID, HashValue)            : Plaintext [data].
 
-free iRekeyingText: bitstring [private].
-free rRekeyingText: bitstring [private].
-
+(******************************************************************************)
+(* Persistent data                                                            *)
+(******************************************************************************)
+table RekeyingInitiatorEphemeralKey(Z).
+table RekeyingResponderEphemeralKey(Z).
 
 (******************************************************************************)
 (* "Abstract" cryptographic primitives                                        *)
@@ -84,7 +86,7 @@ event InitiatorSendsAck(ChatID, Principal, Principal, HashValue).
  * "Client X (one of A or B) running process p in rekeying session i sends a secret
  * message m to its partner, encrypted with the new session key k."
  *)
-event ClientSendsMessageWithNewKey(ProcessID, Principal, ChatID, Principal, Principal, SessionKey, bitstring).
+event ClientSendsMessageWithNewKey(Z, Principal, ChatID, Principal, Principal, SessionKey, bitstring).
 (*
  * ClientReceivesMsgWithNewKey(p, X, i, A, B, k, m):
  *
@@ -92,7 +94,7 @@ event ClientSendsMessageWithNewKey(ProcessID, Principal, ChatID, Principal, Prin
  * received and decrypted a secret message m from its partner, encrypted with
  * the new session key k."
  *)
-event ClientReceivesMessageWithNewKey(ProcessID, Principal, ChatID, Principal, Principal, SessionKey, bitstring).
+event ClientReceivesMessageWithNewKey(Z, Principal, ChatID, Principal, Principal, SessionKey, bitstring).
 
 (*
  * InitiatorSendsMsgWithNewKey(p, i, A, B, k, m):
@@ -100,7 +102,7 @@ event ClientReceivesMessageWithNewKey(ProcessID, Principal, ChatID, Principal, P
  * "Rekeying initiator A running process p in rekeying session i sends a secret
  * message m to B encrypted with the new session key k."
  *)
-event InitiatorSendsMsgWithNewKey(ProcessID, ChatID, Principal, Principal, SessionKey, bitstring).
+event InitiatorSendsMsgWithNewKey(Z, ChatID, Principal, Principal, SessionKey, bitstring).
 
 (*
  * InitiatorReceivesMsgWithNewKey(p, i, A, B, k, m):
@@ -108,7 +110,7 @@ event InitiatorSendsMsgWithNewKey(ProcessID, ChatID, Principal, Principal, Sessi
  * "Rekeying initiator A running process p in rekeying session i has received
  * and decrypted a secret message m from B, encrypted with the new session key k."
  *)
-event InitiatorReceivesMsgWithNewKey(ProcessID, ChatID, Principal, Principal, SessionKey, bitstring).
+event InitiatorReceivesMsgWithNewKey(Z, ChatID, Principal, Principal, SessionKey, bitstring).
 
 (*
  * ResponderReceivesHalfKey(i, A, B, g_a):
@@ -148,7 +150,7 @@ event ResponderHasNegotiatedNewKey(ChatID, Principal, Principal, SessionKey).
  * "Rekeying responder B running process p in rekeying session i sends a secret
  * message m to A encrypted with the new session key k."
  *)
-event ResponderSendsMsgWithNewKey(ProcessID, ChatID, Principal, Principal, SessionKey, bitstring).
+event ResponderSendsMsgWithNewKey(Z, ChatID, Principal, Principal, SessionKey, bitstring).
 
 (*
  * ResponderReceivesMsgWithNewKey(p, i, A, B, k, m):
@@ -156,34 +158,37 @@ event ResponderSendsMsgWithNewKey(ProcessID, ChatID, Principal, Principal, Sessi
  * "Rekeying responder B running process p in rekeying session i has received
  * and decrypted a secret message m from A, encrypted with the new session key k."
  *)
-event ResponderReceivesMsgWithNewKey(ProcessID, ChatID, Principal, Principal, SessionKey, bitstring).
+event ResponderReceivesMsgWithNewKey(Z, ChatID, Principal, Principal, SessionKey, bitstring).
+
+(*
+ * Records additional attacker's capabilities.
+ *)
+event RevealedRekeyingInitiatorEphemeralKey(Z).
+event RevealedRekeyingResponderEphemeralKey(Z).
+event PostCompromisedRekeyingInitiatorEphemeralKey(Z).
+event PostCompromisedRekeyingResponderEphemeralKey(Z).
 
 
 (******************************************************************************)
 (* Process macros                                                             *)
 (******************************************************************************)
 
-let RekeyingInitiator(server: Principal) =
+let RekeyingInitiator() =
   (* An (honest) initiator must be one of Alice or Bob *)
   in(io, (X: Principal, rUser: Principal));
   let iUser = choosePrincipal(X, Alice, Bob) in
-
-  (* See secret chat's protocol *)
-  new iPID: ProcessID;
 
   (*
    * Retrieve the DH parameters and the session key used during the first
    * secret chat.
    *)
-  get SecretChatClientTable(=iUser, =rUser, p, g, old_a, sessionKey) in
-
-  (*
-   * Retrieve the client's authorization key to communicate with the server.
-   *)
-  get AuthKeyClientTable(=iUser, =server, authKey) in
+  get SecretChatClientTable(=iUser, I, R, p, g, old_a, chatid, sessionKey, authKey) in
 
   (* 1. Generate random session id and DH half-key *)
   new a: Z;
+
+  insert RekeyingInitiatorEphemeralKey(a);
+
   let g_a = dhExp(p, g, a) in
   new exchangeID: ChatID;
 
@@ -206,52 +211,33 @@ let RekeyingInitiator(server: Principal) =
 
   (* End of the rekeying protocol *)
 
-  (* Store the secrets for use when testing observational equivalences. *)
-  insert RekeyingClientTable(iUser, rUser, p, g, a, newKey);
-
-  (* Now exchange a couple of messages with the new key *)
-
-  event InitiatorSendsMsgWithNewKey (iPID,        exchangeID, iUser, rUser, newKey, iRekeyingText);
-  event ClientSendsMessageWithNewKey(iPID, iUser, exchangeID, iUser, rUser, newKey, iRekeyingText);
-
-  out(io, encodeSecretChatMsg(CHAT(iPID, iRekeyingText), newKey, authKey));
-
-  in(io, rAnswer: Message);
-
-  let CHAT(pid, rAnswerText) = decodeSecretChatMsg(rAnswer, newKey, authKey) in
-
-  if pid <> iPID then
-
-    event InitiatorReceivesMsgWithNewKey (iPID,        exchangeID, iUser, rUser, newKey, rAnswerText);
-    event ClientReceivesMessageWithNewKey(iPID, iUser, exchangeID, iUser, rUser, newKey, rAnswerText);
-    0.
+  (* Store the session data for use by other processes *)
+  insert RekeyingClientTable(iUser, iUser, rUser, p, g, a, exchangeID, newKey, authKey);
+  0.
 
 
-let RekeyingResponder(server: Principal) =
+let RekeyingResponder() =
   (* An (honest) responder must be one of Alice or Bob *)
   in(io, X: Principal);
   let rUser = choosePrincipal(X, Alice, Bob) in
 
-  (* See secret chat's protocol *)
-  new rPID: ProcessID;
+  new b: Z;
+
+  insert RekeyingResponderEphemeralKey(b);
 
   (*
    * Retrieve the DH parameters and the session key used during the first
    * secret chat.
    *)
-  get SecretChatClientTable(iUser, =rUser, p, g, old_b, sessionKey) in
+  get SecretChatClientTable(=rUser, I, R, p, g, old_b, chatID, sessionKey, authKey) in
 
-  (*
-   * Retrieve the client's authorization key to communicate with the server.
-   *)
-  get AuthKeyClientTable(=rUser, =server, authKey) in
+  let iUser = chooseOtherPrincipal(rUser, I, R) in
 
   in(io, encMsg1: Message);
   let HALFKEYA(exchangeID, g_a) = decodeSecretChatMsg(encMsg1, sessionKey, authKey) in
 
   event ResponderReceivesHalfKey(exchangeID, iUser, rUser, g_a);
 
-  new b: Z;
   let newKey = group2sess(dhExp(p, g_a, b)) in
   let g_b = dhExp(p, g, b) in
   let fp = fps(newKey) in
@@ -268,23 +254,59 @@ let RekeyingResponder(server: Principal) =
 
   (* End of the rekeying protocol *)
 
-  (* Store the secrets for use when testing observational equivalences. *)
-  insert RekeyingClientTable(iUser, rUser, p, g, b, newKey);
+  (* Store the session data for use by other processes *)
+  insert RekeyingClientTable(rUser, iUser, rUser, p, g, b, exchangeID, newKey, authKey);
+  0.
 
-  (* Now exchange a couple of messages with the new key *)
 
-  event ResponderSendsMsgWithNewKey (rPID,        exchangeID, iUser, rUser, newKey, rRekeyingText);
-  event ClientSendsMessageWithNewKey(rPID, rUser, exchangeID, iUser, rUser, newKey, rRekeyingText);
+(*
+ * Client X sends {m}_k in chat session i initiated by iUser with responder rUser.
+ *)
+let RekeyingSend() =
+  get RekeyingClientTable(X, iUser, rUser, p, g, x, i, k, authKey) in
 
-  out(io, encodeSecretChatMsg(CHAT(rPID, rRekeyingText), newKey, authKey));
+  new m: bitstring;
 
-  in(io, iAnswer: Message);
+  event ClientSendsMessageWithNewKey(x, X, i, iUser, rUser, k, m);
+  out(io, encodeSecretChatMsg(CHAT(m), k, authKey));
+  0.
 
-  let CHAT(pid, iAnswerText) = decodeSecretChatMsg(iAnswer, newKey, authKey) in
 
-  if pid <> rPID then
+(*
+ * Client X receives {m}_k in chat session i initiated by iUser with responder rUser.
+ *)
+let RekeyingReceive() =
+  get RekeyingClientTable(X, iUser, rUser, p, g, x, i, k, authKey) in
 
-    event ResponderReceivesMsgWithNewKey (rPID,        exchangeID, iUser, rUser, newKey, iAnswerText);
-    event ClientReceivesMessageWithNewKey(rPID, rUser, exchangeID, iUser, rUser, newKey, iAnswerText);
-    0.
+  in(io, c: Message);
+  let CHAT(m) = decodeSecretChatMsg(c, k, authKey) in
 
+  event ClientReceivesMessageWithNewKey(x, X, i, iUser, rUser, k, m);
+  0.
+
+
+(******************************************************************************)
+(* Auxiliary processes                                                        *)
+(******************************************************************************)
+
+let RevealRekeyingInitiatorEphemeralKey() =
+  get RekeyingInitiatorEphemeralKey(a: Z) in
+  event RevealedRekeyingInitiatorEphemeralKey(a);
+  out(io, a).
+
+let RevealRekeyingResponderEphemeralKey() =
+  get RekeyingResponderEphemeralKey(b: Z) in
+  event RevealedRekeyingResponderEphemeralKey(b);
+  out(io, b).
+
+let PostCompromiseRekeyingInitiatorEphemeralKey() =
+  phase 1;
+  get RekeyingInitiatorEphemeralKey(a: Z) in
+  event PostCompromisedRekeyingInitiatorEphemeralKey(a);
+  out(io, a).
+
+let PostCompromiseRekeyingResponderEphemeralKey() =
+  phase 1;
+  get RekeyingResponderEphemeralKey(b: Z) in
+  event PostCompromisedRekeyingResponderEphemeralKey(b);
+  out(io, b).

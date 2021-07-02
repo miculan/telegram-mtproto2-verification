@@ -6,44 +6,37 @@
  *
  * See: https://core.telegram.org/mtproto/description
  *
- * Expected time to run this script: ~1s
+ * Expected time to run this script: ~2s
  *)
 
 set preciseActions = true.
 
 (*
- * Secrecy assumptions: authorization keys are secure, i.e., long-term and
- * ephemeral keys are not leaked.
+ * Under "normal circumstances" (no leak of long-term or ephemeral secrets),
+ * if an honest client has negotiated key k with the server, and the server
+ * receives a message encrypted with k, then it was that client who sent it,
+ * unless k was revealed by the attacker.
+ *
+ * This query shows thet key compromise impersonation is trivial: if an
+ * authorization key leaks server-side, then the attacker can impersonate the
+ * corresponding client to the server.
+ *
+ * NOTE: the query is not injective because in our model the attacker can
+ * replay (encrypted) messages to the server. In practice, MTProto2 protects
+ * against replay attacks with timestamps and counters (which we do not model).
  *)
-not attacker(new sk).
-not attacker(new a).
-not attacker(new b).
-not attacker(new nk).
-
-(*
- * If the authorization key has been generated correctly and it is known only
- * to the client and the server, then cloud chats messages are secure against
- * attackers (the messages can be seen by the server, of course).
- *)
-
-query s: Nonce, m: bitstring, k: AuthKey;
-  event(ClientSendsCloudMessage(s, m, k))
+query s: Nonce, m: bitstring, k: AuthKey, nc,ns,nk: Nonce, p: Modulus, g, g_a: G, b: Z;
+  event(ClientAcceptsAuthKey(nc, ns, nk, p, g, g_a, b, k))
   && event(ServerReceivesCloudMessage(s, m, k))
-  && attacker(m)
-  ==> event(RevealedAuthKey(k)).
+  ==> event(ClientSendsCloudMessage(s, m, k))
+  ||  event(RevealedServerAuthKey(k)).
 (* ✔︎ Expected result: true *)
 
-query s: Nonce, m: bitstring, k: AuthKey;
-  event(ServerSendsCloudMessage(s, m, k))
-  && event(ClientReceivesCloudMessage(s, m, k))
-  && attacker(m)
-  ==> event(RevealedAuthKey(k)).
-(* ✔︎ Expected result: true *)
 
 (* Main *)
 
 process
-  let allowWeakDiffieHellman = true in
+  let allowWeakDiffieHellman = false in
   (0
     | !RegisterRSAKey(Server)
     | !ServerAuth(Server)
@@ -59,7 +52,7 @@ process
     (* | !RevealRSAKey() *)
 
     (* Allow the attacker to learn any authorization key *)
-    | !RevealAuthKey()
+    | !RevealServerAuthKey()
 
     (* Allow the attacker to reveal (part of) the client's ephemeral state *)
     (* | !RevealNk() *)
@@ -75,4 +68,6 @@ process
     (* | !PostCompromiseAuthProtClientExponent() *)
     (* | !PostCompromiseAuthProtServerExponent() *)
   )
+
+
 

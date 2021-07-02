@@ -6,35 +6,29 @@
  *
  * See: https://core.telegram.org/mtproto/auth_key
  *
- * Expected time to run this script: ~1s
+ * Expected time to run this script: ~20s
  *)
 
 set preciseActions = true.
 
 (*
- * Secrecy assumptions: authorization keys are secure, i.e., long-term and
- * ephemeral keys are not leaked.
- *)
-not attacker(new sk).
-not attacker(new a).
-not attacker(new b).
-not attacker(new nk).
-
-(*
  * Key agreement: If client and server end up negotiating an authorization key
  * in a session executed correctly, then the key is the same.
- * The quality of DH parameters does not matter.
+ *
+ * Of course, if the server's private key is revealed, no such guarantee is
+ * possible (everything can be learned by the attacker).
  *)
 query nc, ns, nk, nk': Nonce, p, p': Modulus, g, g', g_a, g_b: G, a, b: Z, k: AuthKey, k': AuthKey, sk: PrivKey, pID, pID': ProcessID;
   event(ServerAcceptsAuthKey(nc, ns, nk, p, g, a, g_b, k)) && event(ClientAcceptsAuthKey(nc, ns, nk', p', g', g_a, b, k'))
   ==> k = k'
-  || (event(ServerGeneratesNonce(pID, ns)) && event(ServerGeneratesNonce(pID', ns)) && pID <> pID').
+  || (event(ServerGeneratesNonce(pID, ns)) && event(ServerGeneratesNonce(pID', ns)) && pID <> pID')
+  || event(RevealedRSAKey(sk)).
 (* ✔︎ Expected result: true *)
 
 
 (* Main *)
 process
-  let allowWeakDiffieHellman = true in
+  let allowWeakDiffieHellman = false in
   (0
     | !RegisterRSAKey(Server)
     | !ServerAuth(Server)
@@ -42,10 +36,10 @@ process
 
     (* Utility processes (serving ServerAuth()) *)
     | !GenGoodDHParameters()
-    | !GenBadDHParameters()
+    (* | !GenBadDHParameters() *)
 
     (* Allow the attacker to impersonate the server *)
-    (* | !RevealRSAKey() *)
+    | !RevealRSAKey()
 
     (* Allow the attacker to reveal (part of) the client's ephemeral state *)
     (* | !RevealNk() *)
@@ -57,4 +51,5 @@ process
     (* Allow the attacker to reveal the server's ephemeral key (the DH exponent) *)
     (* | !RevealAuthProtServerExponent() *)
   )
+
 

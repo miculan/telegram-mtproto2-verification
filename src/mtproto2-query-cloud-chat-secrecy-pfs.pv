@@ -1,0 +1,80 @@
+(*
+ * MTProto 2.0: Cloud chats
+ *
+ * Model for the protocol used to exchange client-server messages (cloud chats)
+ * using the long-term keys shared between a client and Telegram's server.
+ *
+ * See: https://core.telegram.org/mtproto/description
+ *
+ * Expected time to run this script: ~2s
+ *)
+
+(*
+ * The secrecy of a message should be preserved for sessions that executed correctly
+ * even if some information is revealed after the session has completed (perfect forward secrecy).
+ *
+ * This query and the next one show that no PFS is guaranteed in cloud chats.
+ *)
+set preciseActions = true.
+
+query s: Nonce, m: bitstring, k: AuthKey, nc,ns,nk: Nonce, p: Modulus, g,g_a: G, a,b: Z, sk: PrivKey;
+  event(ClientAcceptsAuthKey(nc, ns, nk, p, g, g_a, b, k))
+  && event(ServerReceivesCloudMessage(s, m, k))
+  && attacker(m)
+  ==> event(PostCompromisedAuthKey(k))
+  ||  event(PostCompromisedRSAKey(sk))
+  || (event(PostCompromisedNk(nk)) && event(PostCompromisedAuthProtClientExponent(b)))
+  || (event(PostCompromisedNk(nk)) && event(PostCompromisedAuthProtServerExponent(a)))
+  || (event(PostCompromisedAuthProtClientExponent(b)) && event(PostCompromisedAuthProtServerExponent(a))).
+(* ✔︎ Expected result: true *)
+
+(*
+ * Ditto for messages received by the client.
+ *)
+query s: Nonce, m: bitstring, k: AuthKey, nk: Nonce, a,b: Z, sk: PrivKey;
+  event(ClientReceivesCloudMessage(s, m, k))
+  && attacker(m)
+  ==> event(PostCompromisedAuthKey(k))
+  ||  event(PostCompromisedRSAKey(sk))
+  || (event(PostCompromisedNk(nk)) && event(PostCompromisedAuthProtClientExponent(b)))
+  || (event(PostCompromisedNk(nk)) && event(PostCompromisedAuthProtServerExponent(a)))
+  || (event(PostCompromisedAuthProtClientExponent(b)) && event(PostCompromisedAuthProtServerExponent(a))).
+(* ✔︎ Expected result: true *)
+
+
+(* Main *)
+
+process
+  let allowWeakDiffieHellman = false in
+  (0
+    | !RegisterRSAKey(Server)
+    | !ServerAuth(Server)
+    | !ClientAuth(Server, allowWeakDiffieHellman)
+    | !ServerCloudChat()
+    | !ClientCloudChat(Server)
+
+    (* Utility processes (serving ServerAuth()) *)
+    | !GenGoodDHParameters()
+    (* | !GenBadDHParameters() *)
+
+    (* Allow the attacker to impersonate the server *)
+    (* | !RevealRSAKey() *)
+
+    (* Allow the attacker to learn any authorization key *)
+    (* | !RevealServerAuthKey() *)
+
+    (* Allow the attacker to reveal (part of) the client's ephemeral state *)
+    (* | !RevealNk() *)
+    (* | !RevealAuthProtClientExponent() *)
+
+    (* Allow the attacker to reveal the server's ephemeral key (the DH exponent) *)
+    (* | !RevealAuthProtServerExponent() *)
+
+    (* Post-compromise attacks *)
+    | !PostCompromiseRSAKey()
+    | !PostCompromiseAuthKey()
+    | !PostCompromiseNk()
+    | !PostCompromiseAuthProtClientExponent()
+    | !PostCompromiseAuthProtServerExponent()
+  )
+

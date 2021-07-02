@@ -12,23 +12,25 @@
 set preciseActions = true.
 
 (*
- * Secrecy assumptions: authorization keys are secure, i.e., long-term and
- * ephemeral keys are not leaked.
+ * Secrecy assumption: the private key of the server is secure and the client's
+ * secret nonce is secure.
  *)
 not attacker(new sk).
-not attacker(new a).
-not attacker(new b).
 not attacker(new nk).
 
 (*
  * Key agreement: If client and server end up negotiating an authorization key
  * in a session executed correctly, then the key is the same.
- * The quality of DH parameters does not matter.
+ *
+ * If the DH exponents are revealed, the attacker can of course compute the
+ * authorization key, but she cannot force the client and the server to compute
+ * two different keys.
  *)
 query nc, ns, nk, nk': Nonce, p, p': Modulus, g, g', g_a, g_b: G, a, b: Z, k: AuthKey, k': AuthKey, sk: PrivKey, pID, pID': ProcessID;
   event(ServerAcceptsAuthKey(nc, ns, nk, p, g, a, g_b, k)) && event(ClientAcceptsAuthKey(nc, ns, nk', p', g', g_a, b, k'))
   ==> k = k'
   || (event(ServerGeneratesNonce(pID, ns)) && event(ServerGeneratesNonce(pID', ns)) && pID <> pID').
+
 (* ✔︎ Expected result: true *)
 
 
@@ -49,12 +51,15 @@ process
 
     (* Allow the attacker to reveal (part of) the client's ephemeral state *)
     (* | !RevealNk() *)
-    (* | !RevealAuthProtClientExponent() *)
+    | !RevealAuthProtClientExponent()
 
     (* Allow the attacker to learn any authorization key *)
-    (* | !RevealAuthKey() *)
+    | !RevealAuthKey()
 
     (* Allow the attacker to reveal the server's ephemeral key (the DH exponent) *)
-    (* | !RevealAuthProtServerExponent() *)
+    | !RevealAuthProtServerExponent()
   )
+
+
+
 

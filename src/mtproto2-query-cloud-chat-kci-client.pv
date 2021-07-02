@@ -12,38 +12,30 @@
 set preciseActions = true.
 
 (*
- * Secrecy assumptions: authorization keys are secure, i.e., long-term and
- * ephemeral keys are not leaked.
- *)
-not attacker(new sk).
-not attacker(new a).
-not attacker(new b).
-not attacker(new nk).
-
-(*
- * If the authorization key has been generated correctly and it is known only
- * to the client and the server, then cloud chats messages are secure against
- * attackers (the messages can be seen by the server, of course).
+ * Under "normal circumstances" (no leak of long-term or ephemeral secrets), if
+ * an honest client receives a message encrypted with key k then it was the
+ * server who sent it, unless k was revealed by the attacker.
+ *
+ * This query shows thet key compromise impersonation is trivial: if an
+ * authorization key leaks client-side, then the attacker can impersonate the
+ * server to that client.
  *)
 
-query s: Nonce, m: bitstring, k: AuthKey;
-  event(ClientSendsCloudMessage(s, m, k))
-  && event(ServerReceivesCloudMessage(s, m, k))
-  && attacker(m)
-  ==> event(RevealedAuthKey(k)).
+(* Reachability query. TODO: move to debug queries *)
+(* query s, s': Nonce, m: bitstring, k: AuthKey; *)
+(*   inj-event(ClientReceivesCloudMessage(s, m, k)). *)
+
+query s, s': Nonce, m: bitstring, k: AuthKey;
+  inj-event(ClientReceivesCloudMessage(s, m, k))
+  ==> (inj-event(ServerSendsCloudMessage(s', m, k)) && s = s')
+  || event(RevealedClientAuthKey(k)).
 (* ✔︎ Expected result: true *)
 
-query s: Nonce, m: bitstring, k: AuthKey;
-  event(ServerSendsCloudMessage(s, m, k))
-  && event(ClientReceivesCloudMessage(s, m, k))
-  && attacker(m)
-  ==> event(RevealedAuthKey(k)).
-(* ✔︎ Expected result: true *)
 
 (* Main *)
 
 process
-  let allowWeakDiffieHellman = true in
+  let allowWeakDiffieHellman = false in
   (0
     | !RegisterRSAKey(Server)
     | !ServerAuth(Server)
@@ -59,7 +51,7 @@ process
     (* | !RevealRSAKey() *)
 
     (* Allow the attacker to learn any authorization key *)
-    | !RevealAuthKey()
+    | !RevealClientAuthKey()
 
     (* Allow the attacker to reveal (part of) the client's ephemeral state *)
     (* | !RevealNk() *)
@@ -75,4 +67,5 @@ process
     (* | !PostCompromiseAuthProtClientExponent() *)
     (* | !PostCompromiseAuthProtServerExponent() *)
   )
+
 

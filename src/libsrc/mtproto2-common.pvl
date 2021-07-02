@@ -19,6 +19,7 @@ type ProcessID.      (* Process IDs are used exclusively to mark events. )
 fun auth2shared(AuthKey)    : SharedKey  [typeConverter].
 fun sess2shared(SessionKey) : SharedKey  [typeConverter].
 fun shared2auth(SharedKey)  : AuthKey    [typeConverter].
+fun auth2bit(AuthKey)       : bitstring  [typeConverter].
 fun shared2bit(SharedKey)   : bitstring  [typeConverter].
 fun sess2bit(SessionKey)    : bitstring  [typeConverter].
 fun nonce2bit(Nonce)        : bitstring  [typeConverter].
@@ -130,14 +131,22 @@ table AuthKeyClientTable(Principal, Principal, AuthKey).
 table AuthKeyServerTable(HashValue, AuthKey).
 
 (*
- * Stores the information a client knows in a secret chat's protocol.
+ * Stores the information a client knows in a secret chat's protocol:
+ *
+ * 1st parameter: the party writing into the table.
+ * 2nd parameter: the chat's initiator.
+ * 3rd parameter: the chat's responder.
  *)
-table SecretChatClientTable(Principal, Principal, Modulus, G, Z, SessionKey).
+table SecretChatClientTable(Principal, Principal, Principal, Modulus, G, Z, ChatID, SessionKey, AuthKey).
 
 (*
  * Stores the information a client knows after re-keying.
+ *
+ * 1st parameter: the party writing into the table.
+ * 2nd parameter: the rekeying's initiator.
+ * 3rd parameter: the rekeying's responder.
  *)
-table RekeyingClientTable(Principal, Principal, Modulus, G, Z, SessionKey).
+table RekeyingClientTable(Principal, Principal, Principal, Modulus, G, Z, ChatID, SessionKey, AuthKey).
 
 
 (******************************************************************************)
@@ -153,6 +162,12 @@ fun choosePrincipal(Principal, Principal, Principal): Principal
     choosePrincipal(X,X,Y) = X
   otherwise forall X: Principal, Y: Principal;
     choosePrincipal(Y,X,Y) = Y.
+
+fun chooseOtherPrincipal(Principal, Principal, Principal): Principal
+  reduc forall X, Y: Principal;
+    chooseOtherPrincipal(X,X,Y) = Y
+  otherwise forall X,Y: Principal;
+    chooseOtherPrincipal(X,Y,X) = Y.
 
 (* Fails if its argument is not true *)
 fun continue_if(bool): bool
