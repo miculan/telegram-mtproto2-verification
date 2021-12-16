@@ -20,10 +20,7 @@
   ./run.sh *query*
   ```
 
-4. Compare the results with the expected results as indicated in the comments
-   inside the query scripts.
-
-**NOTE:** the queries have been tested with ProVerif v2.02pl1.
+**NOTE:** the queries have been tested with ProVerif v2.04.
 
 
 ## Library files
