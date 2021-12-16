@@ -1,0 +1,29 @@
+set preciseActions = true.
+
+query s: Nonce, m: bitstring, k: AuthKey, nc,ns,nk: Nonce, p: Modulus, g, g_a: G, b: Z;
+  event(ClientAcceptsAuthKey(nc, ns, nk, p, g, g_a, b, k))
+  && event(ServerReceivesCloudMessage(s, m, k))
+  ==> event(RevealedServerAuthKey(k)).
+(* ✖︎ Expected result: false *)
+
+query s: Nonce, m: bitstring, k: AuthKey, nc,ns,nk: Nonce, p: Modulus, g, g_a: G, b: Z;
+  event(ClientAcceptsAuthKey(nc, ns, nk, p, g, g_a, b, k))
+  && event(ServerReceivesCloudMessage(s, m, k))
+  ==> event(ClientSendsCloudMessage(s, m, k)).
+(* ✖︎ Expected result: false *)
+
+
+(* Main *)
+
+process
+  let allowWeakDiffieHellman = false in
+  (0
+    | !RegisterRSAKey(Server)
+    | !ServerAuth(Server)
+    | !ClientAuth(Server, allowWeakDiffieHellman)
+    | !ServerCloudChat()
+    | !ClientCloudChat(Server)
+    | !GenGoodDHParameters()
+    | !RevealServerAuthKey()
+  )
+

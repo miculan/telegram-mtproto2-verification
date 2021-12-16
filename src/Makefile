@@ -11,7 +11,8 @@ LIB        = mtproto2.pvl
 LIBDIR     = ./libsrc
 
 # The order of the library files matters: do not change it!
-LIBSRC     = $(LIBDIR)/proverif/cryptoverif.pvl
+LIBSRC     =
+# LIBSRC    += $(LIBDIR)/proverif/cryptoverif.pvl
 LIBSRC    += $(LIBDIR)/mtproto2-common.pvl
 LIBSRC    += $(LIBDIR)/mtproto2-encryption/$(ENC)/mtproto2-encryption-common.pvl
 LIBSRC    += $(LIBDIR)/mtproto2-encryption/$(ENC)/mtproto2-encryption-authorization.pvl

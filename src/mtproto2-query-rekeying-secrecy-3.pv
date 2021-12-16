@@ -1,0 +1,48 @@
+(*
+ * MTProto 2.0: Rekeying
+ *
+ * Model for the protocol used for updating the session keys of secret
+ * chats.
+ *
+ * See: https://core.telegram.org/api/end-to-end/pfs
+ *
+ * Expected time to run this script: ~1s
+ *)
+
+(*
+ * NOTE: in this query, we are assuming that the secret chat protocol was
+ * executed correctly and the session key that was established is secure.
+ *)
+query k: SessionKey, a,b: Z, I,R: Principal, i: ChatID;
+  event(InitiatorHasNegotiatedNewKey(i, I, R, k))
+  && attacker(k)
+  ==> (event(PostCompromisedRekeyingInitiatorEphemeralKey(a)) && event(PostCompromisedRekeyingResponderEphemeralKey(b))).
+(* ✔︎ Expected result: true *)
+
+
+(* Main *)
+
+let Init() =
+  new authKey1: AuthKey;
+  new authKey2: AuthKey;
+  insert AuthKeyClientTable(Alice, Server, authKey1);
+  insert AuthKeyClientTable(Bob, Server, authKey2);
+  new a: Z;
+  new b: Z;
+  new i: ChatID;
+  let k = genStrongSessionKey(a,b) in
+  insert SecretChatClientTable(Alice, Alice, Bob, STRONG, GOOD, a, i, k);
+  insert SecretChatClientTable(Bob, Alice, Bob, STRONG, GOOD, b, i, k);
+  0.
+
+process
+  (0
+    | !Init()
+    | !RekeyingInitiator(Server)
+    | !RekeyingResponder(Server)
+    | !RekeyingSend(Server)
+    | !RekeyingReceive(Server)
+    | !PostCompromiseRekeyingInitiatorEphemeralKey()
+    | !PostCompromiseRekeyingResponderEphemeralKey()
+  )
+

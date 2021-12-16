@@ -1,0 +1,41 @@
+(*
+ * MTProto 2.0: Cloud chats
+ *
+ * Model for the protocol used to exchange client-server messages (cloud chats)
+ * using the long-term keys shared between a client and Telegram's server.
+ *
+ * See: https://core.telegram.org/mtproto/description
+ *
+ * Expected time to run this script: ~1s
+ *)
+
+set preciseActions = true.
+
+(*
+ * Secrecy assumptions: authorization keys are secure, i.e., long-term and
+ * ephemeral keys are not leaked.
+ *)
+not attacker(new sk).
+not attacker(new a).
+not attacker(new b).
+not attacker(new nk).
+
+query s: Nonce, m: bitstring, k: AuthKey;
+  event(ClientReceivesCloudMessage(s, m, k))
+  && attacker(m)
+  ==> event(RevealedAuthKey(k)).
+(* ✔︎ Expected result: true *)
+
+(* Main *)
+
+process
+  (0
+    | !RegisterRSAKey(Server)
+    | !ServerAuth(Server)
+    | !ClientAuth(Server, false)
+    | !ServerCloudChat()
+    | !ClientCloudChat(Server)
+    | !GenGoodDHParameters()
+    | !RevealAuthKey()
+  )
+

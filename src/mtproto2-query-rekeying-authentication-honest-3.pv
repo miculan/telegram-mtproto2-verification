@@ -1,0 +1,54 @@
+(*
+ * MTProto 2.0: Rekeying
+ *
+ * Model for the protocol used for updating the session keys of secret chats.
+ *
+ * See: https://core.telegram.org/api/end-to-end/pfs
+ *
+ * Expected time to run this script: ~30s
+ *)
+
+(*
+ * If, after rekeying, an (honest) client X (one of Alice or Bob) receives a
+ * message in a session initiated by Alice with Bob as a responder, then it
+ * was one of Alice or Bob who sent it, in that session or in a parallel
+ * session initiated by Bob having the same chat ID.
+ *
+ * NOTE: an injective query is falsified by ProVerif because the message can be
+ * replayed by an attacker (we do not model Telegram's protections against
+ * replay attacks).
+ *)
+query x, x': Z, i: ChatID, X: Principal, k: SessionKey, m: bitstring;
+  event(ClientReceivesMessageWithNewKey(x, X, i, Alice, Bob, k, m))
+  ==> event(ClientSendsMessageWithNewKey(x', Alice, i, Alice, Bob, k, m))
+  ||  event(ClientSendsMessageWithNewKey(x', Bob, i, Alice, Bob, k, m))
+  ||  event(ClientSendsMessageWithNewKey(x', Alice, i, Bob, Alice, k, m))
+  ||  event(ClientSendsMessageWithNewKey(x', Bob, i, Bob, Alice, k, m)).
+(* ✔︎ Expected result: true *)
+
+
+(* Main *)
+
+let Init() =
+  new authKey1: AuthKey;
+  new authKey2: AuthKey;
+  insert AuthKeyClientTable(Alice, Server, authKey1);
+  insert AuthKeyClientTable(Bob, Server, authKey2);
+  new a: Z;
+  new b: Z;
+  new i: ChatID;
+  let k = genStrongSessionKey(a,b) in
+  insert SecretChatClientTable(Alice, Alice, Bob, STRONG, GOOD, a, i, k);
+  insert SecretChatClientTable(Bob, Alice, Bob, STRONG, GOOD, b, i, k);
+  0.
+
+process
+  (0
+    | !Init()
+    | !RegisterSessionKey()
+    | !RekeyingInitiator(Server)
+    | !RekeyingResponder(Server)
+    | !RekeyingSend(Server)
+    | !RekeyingReceive(Server)
+  )
+

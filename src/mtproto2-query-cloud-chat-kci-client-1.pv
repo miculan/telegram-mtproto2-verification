@@ -1,0 +1,44 @@
+(*
+ * MTProto 2.0: Cloud chats
+ *
+ * Model for the protocol used to exchange client-server messages (cloud chats)
+ * using the long-term keys shared between a client and Telegram's server.
+ *
+ * See: https://core.telegram.org/mtproto/description
+ *
+ * Expected time to run this script: ~2s
+ *)
+
+set preciseActions = true.
+
+(*
+ * Under "normal circumstances" (no leak of long-term or ephemeral secrets), if
+ * an honest client receives a message encrypted with key k then it was the
+ * server who sent it, unless k was revealed by the attacker.
+ *
+ * This query shows thet key compromise impersonation is trivial: if an
+ * authorization key leaks client-side, then the attacker can impersonate the
+ * server to that client.
+ *)
+
+query s, s': Nonce, m: bitstring, k: AuthKey;
+  inj-event(ClientReceivesCloudMessage(s, m, k))
+  ==> (inj-event(ServerSendsCloudMessage(s', m, k)) && s = s')
+  || event(RevealedAuthKey(k)).
+(* ✔︎ Expected result: true *)
+
+
+(* Main *)
+
+process
+  let weakDiffieHellman = false in
+  (0
+    | !RegisterRSAKey(Server)
+    | !ServerAuth(Server)
+    | !ClientAuth(Server, weakDiffieHellman)
+    | !ServerCloudChat()
+    | !ClientCloudChat(Server)
+    | !GenGoodDHParameters()
+    | !RevealAuthKey()
+  )
+

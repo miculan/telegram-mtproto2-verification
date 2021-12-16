@@ -1,0 +1,36 @@
+query i: ChatID, R: Principal, k: SessionKey, m: bitstring;
+  event(ResponderHasNegotiatedNewKey    (i, Alice, R,     k))
+  ==> event(InitiatorHasNegotiatedNewKey(i, Alice, R,     k)).
+(* ✖︎ Expected result: false *)
+
+query i: ChatID, R: Principal, k: SessionKey, m: bitstring;
+  event(ResponderHasNegotiatedNewKey    (i, Alice, R,     k))
+  ==> event(InitiatorHasNegotiatedNewKey(i, R,     Alice, k)).
+(* ✖︎ Expected result: false *)
+
+
+(* Main *)
+
+let Init() =
+  new authKey1: AuthKey;
+  new authKey2: AuthKey;
+  insert AuthKeyClientTable(Alice, Server, authKey1);
+  insert AuthKeyClientTable(Bob, Server, authKey2);
+  new a: Z;
+  new b: Z;
+  new i: ChatID;
+  let k = genStrongSessionKey(a,b) in
+  insert SecretChatClientTable(Alice, Alice, Bob, STRONG, GOOD, a, i, k);
+  insert SecretChatClientTable(Bob, Alice, Bob, STRONG, GOOD, b, i, k);
+  0.
+
+process
+  (0
+    | !Init()
+    | !RegisterSessionKey()
+    | !RekeyingInitiator(Server)
+    | !RekeyingResponder(Server)
+    | !RekeyingSend(Server)
+    | !RekeyingReceive(Server)
+  )
+

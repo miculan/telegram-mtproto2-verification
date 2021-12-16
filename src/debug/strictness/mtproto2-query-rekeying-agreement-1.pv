@@ -1,0 +1,62 @@
+set preciseActions = true.
+
+query x, x': Z, i: ChatID, X, Y, I, R: Principal, k, k', kx: SessionKey, m: bitstring;
+  event(ClientSendsMessageWithNewKey(x', Y, i, I, R, k', m))
+  && event(ClientReceivesMessageWithNewKey(x, X, i, I, R, k, m))
+  ==> k = group2sess(BAD)
+  || k' = group2sess(BAD)
+  || (event(RevealedRekeyingInitiatorEphemeralKey(x)) && event(RevealedRekeyingResponderEphemeralKey(x'))).
+  (* || event(AttackerRegisteredSessionKey(kx, X))  *)
+  (* || event(AttackerRegisteredSessionKey(kx, Y)). *)
+(* ✖︎ Expected result: false *)
+
+query x, x': Z, i: ChatID, X, Y, I, R: Principal, k, k', kx: SessionKey, m: bitstring;
+  event(ClientSendsMessageWithNewKey(x', Y, i, I, R, k', m))
+  && event(ClientReceivesMessageWithNewKey(x, X, i, I, R, k, m))
+  ==> k = k'
+  || k' = group2sess(BAD)
+  || (event(RevealedRekeyingInitiatorEphemeralKey(x)) && event(RevealedRekeyingResponderEphemeralKey(x'))).
+  (* || event(AttackerRegisteredSessionKey(kx, X))  *)
+  (* || event(AttackerRegisteredSessionKey(kx, Y)). *)
+(* ✖︎ Expected result: false *)
+
+query x, x': Z, i: ChatID, X, Y, I, R: Principal, k, k', kx: SessionKey, m: bitstring;
+  event(ClientSendsMessageWithNewKey(x', Y, i, I, R, k', m))
+  && event(ClientReceivesMessageWithNewKey(x, X, i, I, R, k, m))
+  ==> k = k'
+  || k = group2sess(BAD)
+  || (event(RevealedRekeyingInitiatorEphemeralKey(x)) && event(RevealedRekeyingResponderEphemeralKey(x'))).
+  (* || event(AttackerRegisteredSessionKey(kx, X))  *)
+  (* || event(AttackerRegisteredSessionKey(kx, Y)). *)
+(* ✖︎ Expected result: false *)
+
+
+(* Main *)
+
+let Init() =
+  new authKey1: AuthKey;
+  new authKey2: AuthKey;
+  insert AuthKeyClientTable(Alice, Server, authKey1);
+  insert AuthKeyClientTable(Bob, Server, authKey2);
+  new a: Z;
+  new b: Z;
+  new i: ChatID;
+  let k = genStrongSessionKey(a,b) in
+  insert SecretChatClientTable(Alice, Alice, Bob, STRONG, GOOD, a, i, k);
+  insert SecretChatClientTable(Bob, Alice, Bob, STRONG, GOOD, b, i, k);
+  insert SecretChatClientTable(Alice, Alice, Bob, STRONG, BAD, a, i, k);
+  insert SecretChatClientTable(Bob, Alice, Bob, STRONG, BAD, b, i, k);
+  0.
+
+process
+  (0
+    | !Init()
+    (* | !RegisterSessionKey() *)
+    | !RekeyingInitiator(Server)
+    | !RekeyingResponder(Server)
+    | !RekeyingSend(Server)
+    | !RekeyingReceive(Server)
+    | !RevealRekeyingInitiatorEphemeralKey()
+    | !RevealRekeyingResponderEphemeralKey()
+  )
+

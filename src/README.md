@@ -2,8 +2,10 @@
 
 **TL;DR**
 
-1. Install ProVerif 2.01 or later.
+1. Install ProVerif 2.01 or later (v2.04 or later recommended).
+
 2. Make sure that `proverif` is in your `PATH`.
+
 3. Execute:
 
     ```sh

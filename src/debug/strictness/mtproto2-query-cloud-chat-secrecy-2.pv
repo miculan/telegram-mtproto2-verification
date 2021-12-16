@@ -1,0 +1,52 @@
+set preciseActions = true.
+
+not attacker(new sk).
+not attacker(new a).
+not attacker(new b).
+not attacker(new nk).
+
+query s: Nonce, m: bitstring, k: AuthKey;
+  event(ServerSendsCloudMessage(s, m, k)).
+(* ✖︎ Expected result: false *)
+
+query s: Nonce, m: bitstring, k: AuthKey;
+  event(ClientReceivesCloudMessage(s, m, k)).
+(* ✖︎ Expected result: false *)
+
+query m: bitstring, k: AuthKey;
+  attacker(m)
+  ==> event(RevealedAuthKey(k)).
+(* ✖︎ Expected result: false *)
+
+query s: Nonce, m: bitstring, k: AuthKey;
+  event(ServerSendsCloudMessage(s, m, k))
+  && attacker(m)
+  ==> event(RevealedAuthKey(k)).
+(* ✖︎ Expected result: false *)
+
+query s: Nonce, m: bitstring, k: AuthKey;
+  event(ServerSendsCloudMessage(s, m, k))
+  && attacker(m)
+  ==> event(RevealedAuthKey(k)).
+(* ✖︎ Expected result: false *)
+
+query s: Nonce, m: bitstring, k: AuthKey;
+  event(ServerSendsCloudMessage(s, m, k))
+  && event(ClientReceivesCloudMessage(s, m, k))
+  ==> event(RevealedAuthKey(k)).
+(* ✖︎ Expected result: false *)
+
+
+(* Main *)
+
+process
+  (0
+    | !RegisterRSAKey(Server)
+    | !ServerAuth(Server)
+    | !ClientAuth(Server, false)
+    | !ServerCloudChat()
+    | !ClientCloudChat(Server)
+    | !GenGoodDHParameters()
+    | !RevealAuthKey()
+  )
+

@@ -1,0 +1,116 @@
+query i: ChatID, X: Principal, Y: Principal, g_a: G;
+  event(InitiatorSendsHalfKey(i, X, Y, g_a)).
+(* ✖︎ Expected result: false *)
+
+query i: ChatID, X: Principal, Y: Principal, g_b: G, fp: HashValue;
+  event(InitiatorReceivesHalfKey(i, X, Y, g_b, fp)).
+(* ✖︎ Expected result: false *)
+
+query i: ChatID, X: Principal, Y: Principal;
+  event(RekeyingKeyFingerprintMatches(i, X, Y, true)).
+(* ✖︎ Expected result: false *)
+
+query i: ChatID, X: Principal, Y: Principal;
+  event(RekeyingKeyFingerprintMatches(i, X, Y, false)).
+(* ✖︎ Expected result: false *)
+
+query i: ChatID, X: Principal, Y: Principal, k: SessionKey;
+  event(InitiatorHasNegotiatedNewKey(i, X, Y, k)).
+(* ✖︎ Expected result: false *)
+
+query i: ChatID, X: Principal, Y: Principal, fp: HashValue;
+  event(InitiatorSendsAck(i, X, Y, fp)).
+(* ✖︎ Expected result: false *)
+
+query x: Z, X, I, R: Principal, i: ChatID, k: SessionKey, m: bitstring;
+  event(ClientSendsMessageWithNewKey(x, X, i, I, R, k, m)).
+(* ✖︎ Expected result: false *)
+
+query x: Z, X, I, R: Principal, i: ChatID, k: SessionKey, m: bitstring;
+  event(ClientReceivesMessageWithNewKey(x, X, i, I, R, k, m)).
+(* ✖︎ Expected result: false *)
+
+query i: ChatID, X, Y: Principal, g: G;
+  event(ResponderReceivesHalfKey(i, X, Y, g)).
+
+query i: ChatID, X, Y: Principal, g: G, fp: HashValue;
+  event(ResponderSendsHalfKey(i, X, Y, g, fp)).
+
+query i: ChatID, X: Principal, Y: Principal, fp: HashValue;
+  event(ResponderReceivesAck(i, X, Y, fp)).
+(* ✖︎ Expected result: false *)
+
+query i: ChatID, X: Principal, Y: Principal, k: SessionKey;
+  event(ResponderHasNegotiatedNewKey(i, X, Y, k)).
+(* ✖︎ Expected result: false *)
+
+query x: Z;
+  event(RevealedRekeyingInitiatorEphemeralKey(x)).
+(* ✖︎ Expected result: false *)
+
+query x: Z;
+  event(RevealedRekeyingResponderEphemeralKey(x)).
+(* ✖︎ Expected result: false *)
+
+query x: Z;
+  event(PostCompromisedRekeyingInitiatorEphemeralKey(x)).
+(* ✖︎ Expected result: false *)
+
+query x: Z;
+  event(PostCompromisedRekeyingResponderEphemeralKey(x)).
+(* ✖︎ Expected result: false *)
+
+query x, x': Z, i, i': ChatID, I, R, X, Y: Principal, k: SessionKey, m: bitstring;
+  event(ClientSendsMessageWithNewKey(x, X, i, Alice, R, k, m))
+  && event(ClientReceivesMessageWithNewKey(x', Y, i', I, Bob, k, m)).
+
+query attacker(new m).
+(* ✖︎ Expected result: false *)
+
+query k: SessionKey, a,b: Z, I,R: Principal, i: ChatID;
+  event(InitiatorHasNegotiatedNewKey(i, I, R, k))
+  && attacker(k).
+(* ✖︎ Expected result: false *)
+
+query k: SessionKey, m: bitstring, x,a,b: Z, X,I,R: Principal, i: ChatID;
+  event(ClientSendsMessageWithNewKey(x, X, i, I, R, k, m))
+  && attacker(m).
+(* ✖︎ Expected result: false *)
+
+query k: SessionKey, m: bitstring, x,y,a,b: Z, X,Y,I,R: Principal, i: ChatID;
+  event(ClientSendsMessageWithNewKey(x, X, i, I, R, k, m))
+  && event(ClientReceivesMessageWithNewKey(y, Y, i, I, R, k, m))
+  && attacker(m).
+(* ✖︎ Expected result: false *)
+
+
+(* Main *)
+let Init() =
+  new a: Z;
+  new b: Z;
+  new i: ChatID;
+  let k = genStrongSessionKey(a,b) in
+  insert SecretChatClientTable(Alice, Alice, Bob, STRONG, GOOD, a, i, k);
+  insert SecretChatClientTable(Bob, Alice, Bob, STRONG, GOOD, b, i, k);
+  (* Weak parameters should cause key fingerprint mismatches *)
+  let k' = genWeakSessionKey() in
+  insert SecretChatClientTable(Alice, Alice, Bob, STRONG, BAD, b, i, k');
+  new authKey1: AuthKey;
+  new authKey2: AuthKey;
+  insert AuthKeyClientTable(Alice, Server, authKey1);
+  insert AuthKeyClientTable(Bob, Server, authKey2);
+  0.
+
+process
+  (0
+    | Init()
+    | !RekeyingInitiator(Server)
+    | !RekeyingResponder(Server)
+    | !RekeyingSend(Server)
+    | !RekeyingReceive(Server)
+    | !RevealRekeyingInitiatorEphemeralKey()
+    | !RevealRekeyingResponderEphemeralKey()
+    | !PostCompromiseRekeyingInitiatorEphemeralKey()
+    | !PostCompromiseRekeyingResponderEphemeralKey()
+  )
+

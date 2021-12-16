@@ -2,7 +2,7 @@
  * MTProto 2.0: Cloud chats
  *
  * Model for cloud chat messages, i.e., messages exchanged between a client and
- * Telegram's server, encrypted using a long-term shared key (aka,
+ * Telegram's server, encrypted using a long-term shared key (aka, an
  * authorization key).
  *
  * See: https://core.telegram.org/mtproto/description
@@ -15,7 +15,7 @@
 (* not defined here so that the choice of a model for MTProto's encryption    *)
 (* scheme can be done independently, without touching this file.              *)
 (*                                                                            *)
-(* The reference for MTProto's encryption scheme for cloud chat n             *)
+(* The reference for MTProto's encryption scheme for cloud chat:              *)
 (*                                                                            *)
 (*    https://core.telegram.org/mtproto/description                           *)
 (*                                                                            *)
@@ -27,23 +27,15 @@
 
 
 (******************************************************************************)
-(* Private data                                                               *)
-(******************************************************************************)
-free secretAuthMsg1: bitstring [private].
-free secretAuthMsg2: bitstring [private].
-free secretAuthMsg3: bitstring [private].
-
-
-(******************************************************************************)
 (* Events                                                                     *)
 (******************************************************************************)
-event ClientSendsCloudMessage                        (Principal, Nonce, bitstring, AuthKey).
-event ClientReceivesCloudMessage                     (Principal, Nonce, bitstring, AuthKey).
-event ClientSendsCloudMessageAfterCompromisedNonce   (Principal, Nonce, bitstring, AuthKey).
+event ClientSendsCloudMessage                        (Nonce, bitstring, AuthKey).
+event ClientReceivesCloudMessage                     (Nonce, bitstring, AuthKey).
+event ClientSendsCloudMessageInPhaseOne              (Nonce, bitstring, AuthKey).
 
-event ServerReceivesCloudMessage                     (Principal, Nonce, bitstring, AuthKey).
-event ServerSendsCloudMessage                        (Principal, Nonce, bitstring, AuthKey).
-event ServerReceivesCloudMessageAfterCompromisedNonce(Principal, Nonce, bitstring, AuthKey).
+event ServerReceivesCloudMessage                     (Nonce, bitstring, AuthKey).
+event ServerSendsCloudMessage                        (Nonce, bitstring, AuthKey).
+event ServerReceivesCloudMessageInPhaseOne           (Nonce, bitstring, AuthKey).
 
 
 (******************************************************************************)
@@ -51,13 +43,15 @@ event ServerReceivesCloudMessageAfterCompromisedNonce(Principal, Nonce, bitstrin
 (******************************************************************************)
 
 (*
- * Constants used to distinguish client->server messages from server->client messages.
+ * Constructors for the encrypted part of cloud-chat messages. In practice,
+ * Telegram uses monotonically increasing counters (message identifiers), which
+ * also permit to distinguish between client messages and server messages. For
+ * the server, message identifiers must be equal to 1 modulo 4, or to 3 modulo
+ * 4. Message identifiers for the messages sent by clients must be divisible by
+ * 4.
  *)
-const CLIENT: bitstring.
-const SERVER: bitstring.
-
-(* Constructor for the encrypted part of a cloud-chat message *)
-fun CC(bitstring, Nonce, bitstring): Plaintext [data].
+fun SPT(Nonce, bitstring): Plaintext [data].
+fun CPT(Nonce, bitstring): Plaintext [data].
 
 (* Constructor for a message *)
 fun MSG(Message): Message [data].
@@ -69,6 +63,10 @@ fun MSG(Message): Message [data].
  * server: server's identity
  *)
 let ClientCloudChat(server: Principal) =
+  (*
+   * Ensure that this protocol is run by either Alice or Bob (two honest
+   * parties).
+   *)
   in(io, X: Principal);
   let cUser = choosePrincipal(X, Alice, Bob) in
 
@@ -81,21 +79,25 @@ let ClientCloudChat(server: Principal) =
    * session id is sent along with the encrypted message.
    *)
   new sessionID: Nonce;
+  new m1: bitstring;
 
-  event ClientSendsCloudMessage(server, sessionID, secretAuthMsg1, authKey);
+  event ClientSendsCloudMessage(sessionID, m1, authKey);
 
-  let msg1 = CC(CLIENT, sessionID, secretAuthMsg1) in
+  let msg1 = CPT(sessionID, m1) in
   out(io, MSG(encodeCloudChatMsg(msg1, authKey)));
 
   in(io, MSG(msg2));
-  let CC(=SERVER, =sessionID, plaintext2) = clientDecodeCloudChatMsg(msg2, authKey) in
+  let SPT(=sessionID, m2) = clientDecodeCloudChatMsg(msg2, authKey) in
 
-  event ClientReceivesCloudMessage(server, sessionID, plaintext2, authKey);
+  event ClientReceivesCloudMessage(sessionID, m2, authKey);
 
-  phase 1; (* The secret nk is post-compromised in the client process in phase 1 *)
-  event ClientSendsCloudMessageAfterCompromisedNonce(server, sessionID, secretAuthMsg3, authKey);
+  phase 1;
+  new m3: bitstring;
 
-  let msg3 = CC(CLIENT, sessionID, secretAuthMsg3) in
+  let msg3 = CPT(sessionID, m3) in
+
+  event ClientSendsCloudMessageInPhaseOne(sessionID, m3, authKey);
+
   out(io, MSG(encodeCloudChatMsg(msg3, authKey)));
   0.
 
@@ -105,21 +107,24 @@ let ClientCloudChat(server: Principal) =
  *
  * server: server's identity
  *)
-let ServerCloudChat(server: Principal) =
+let ServerCloudChat() =
 
   in(io, MSG(msg1));
-  let (CC(=CLIENT, sessionID, plaintext1), authKey: AuthKey) = serverDecodeCloudChatMsg(msg1) in
+  let (CPT(sessionID, m1), authKey: AuthKey) = serverDecodeCloudChatMsg(msg1) in
 
-  event ServerReceivesCloudMessage(server, sessionID, plaintext1, authKey);
-  event ServerSendsCloudMessage(server, sessionID, secretAuthMsg2, authKey);
+  event ServerReceivesCloudMessage(sessionID, m1, authKey);
 
-  let msg2 = CC(SERVER, sessionID, secretAuthMsg2) in
+  new m2: bitstring;
+
+  event ServerSendsCloudMessage(sessionID, m2, authKey);
+
+  let msg2 = SPT(sessionID, m2) in
   out(io, MSG(encodeCloudChatMsg(msg2, authKey)));
 
-  phase 1; (* The secret nk is post-compromised in the client process in phase 1 *)
+  phase 1;
   in(io, MSG(msg3));
-  let (CC(=CLIENT, =sessionID, plaintext3), =authKey) = serverDecodeCloudChatMsg(msg3) in
+  let (CPT(=sessionID, m3), =authKey) = serverDecodeCloudChatMsg(msg3) in
 
-  event ServerReceivesCloudMessageAfterCompromisedNonce(server, sessionID, plaintext3, authKey);
+  event ServerReceivesCloudMessageInPhaseOne(sessionID, m3, authKey);
   0.
 

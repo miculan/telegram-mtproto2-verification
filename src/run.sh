@@ -4,6 +4,7 @@ then
   for arg in $@
   do
     echo "\033[4;31mQUERY:\033[0m" "$arg"
+    grep 'Expected result:' "$arg"
     time proverif -color -lib mtproto2 "$arg" | grep "RESULT"
   done
 else

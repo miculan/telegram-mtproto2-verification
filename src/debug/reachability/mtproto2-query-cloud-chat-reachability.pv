@@ -1,0 +1,50 @@
+query n: Nonce, s: bitstring, k: AuthKey;
+  event(ClientSendsCloudMessage(n, s, k)).
+(* ✖︎ Expected result: false *)
+
+query n: Nonce, s: bitstring, k: AuthKey;
+  event (ServerReceivesCloudMessage(n, s, k)).
+(* ✖︎ Expected result: false *)
+
+query n: Nonce, s: bitstring, k: AuthKey;
+  event (ServerSendsCloudMessage(n, s, k)).
+(* ✖︎ Expected result: false *)
+
+query n: Nonce, s: bitstring, k: AuthKey;
+  event (ClientReceivesCloudMessage(n, s, k)).
+(* ✖︎ Expected result: false *)
+
+query n: Nonce, s: bitstring, k: AuthKey;
+  event (ClientSendsCloudMessageInPhaseOne(n, s, k)).
+(* ✖︎ Expected result: false *)
+
+query n: Nonce, s: bitstring, k: AuthKey;
+  event (ServerReceivesCloudMessageInPhaseOne(n, s, k)).
+(* ✖︎ Expected result: false *)
+
+query attacker(new m1).
+(* ✖︎ Expected result: false *)
+(* NOTE: this is false because we run RevealAuthKey(). *)
+
+query attacker(new m2).
+(* ✖︎ Expected result: false *)
+(* NOTE: this is false because the attacker may act as a client. *)
+
+query attacker(new m3).
+(* ✖︎ Expected result: false *)
+(* NOTE: this is false because we run RevealAuthKey(). *)
+
+
+process
+  let allowWeakDiffieHellman = false in
+  (0
+    | !RegisterRSAKey(Server)
+    | !ServerAuth(Server)
+    | !ClientAuth(Server, allowWeakDiffieHellman)
+    | !ServerCloudChat()
+    | !ClientCloudChat(Server)
+    | !GenGoodDHParameters()
+    | !GenBadDHParameters()
+    | !RevealAuthKey()
+  )
+

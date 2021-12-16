@@ -1,0 +1,52 @@
+(* Running this script takes ~10min *)
+set preciseActions = true.
+
+query i: ChatID, I, R: Principal, k, k': SessionKey, m: bitstring;
+  event(InitiatorHasNegotiatedNewKey(i, I, R, k))
+  && event(ResponderHasNegotiatedNewKey(i, I, R, k'))
+  ==> event(ClientUsesStrongDHParameters(I, false)).
+(* ✖︎ Expected result: false *)
+
+query i: ChatID, I, R: Principal, k, k': SessionKey, m: bitstring;
+  event(InitiatorHasNegotiatedNewKey(i, I, R, k))
+  && event(ResponderHasNegotiatedNewKey(i, I, R, k'))
+  ==> k = k'.
+(* ✖︎ Expected result: false *)
+
+query i: ChatID, I, R: Principal, k, k': SessionKey, m: bitstring;
+  event(InitiatorHasNegotiatedNewKey(i, I, R, k))
+  && event(ResponderHasNegotiatedNewKey(i, I, R, k'))
+  ==> k = k'
+  || (event(ClientUsesStrongDHParameters(I, false)) && event(ClientUsesStrongDHParameters(R, false))).
+(* ✖︎ Expected result: false *)
+
+
+(* Main *)
+
+let Init() =
+  new authKey1: AuthKey;
+  new authKey2: AuthKey;
+  insert AuthKeyClientTable(Alice, Server, authKey1);
+  insert AuthKeyClientTable(Bob, Server, authKey2);
+  new a: Z;
+  new b: Z;
+  new i: ChatID;
+  let k = genStrongSessionKey(a,b) in
+  insert SecretChatClientTable(Alice, Alice, Bob, STRONG, GOOD, a, i, k);
+  insert SecretChatClientTable(Bob, Alice, Bob, STRONG, GOOD, b, i, k);
+  insert SecretChatClientTable(Alice, Alice, Bob, STRONG, BAD, a, i, k);
+  insert SecretChatClientTable(Bob, Alice, Bob, STRONG, BAD, b, i, k);
+  0.
+
+process
+  (0
+    | !Init()
+    | !RegisterSessionKey()
+    | !RekeyingInitiator(Server)
+    | !RekeyingResponder(Server)
+    | !RekeyingSend(Server)
+    | !RekeyingReceive(Server)
+    | !RevealRekeyingInitiatorEphemeralKey()
+    | !RevealRekeyingResponderEphemeralKey()
+  )
+

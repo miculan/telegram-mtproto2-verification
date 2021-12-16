@@ -1,0 +1,49 @@
+(*
+ * MTProto 2.0: Rekeying
+ *
+ * Model for the protocol used for updating the session keys of secret chats.
+ *
+ * See: https://core.telegram.org/api/end-to-end/pfs
+ *
+ * Expected time to run this script: ~2min
+ *)
+
+(*
+ * If an (honest) responder R ends up accepting a new session key k after a
+ * rekeying session i with Alice, then it was Alice who started session i and
+ * Alice also has computed the new key k, unless R himself started session i
+ * with Alice and his messages were reflected back by the attacker in a
+ * parallel session having the same chat ID.
+ *)
+query i: ChatID, R: Principal, k: SessionKey, m: bitstring;
+  inj-event(ResponderHasNegotiatedNewKey    (i, Alice, R,     k))
+  ==> inj-event(InitiatorHasNegotiatedNewKey(i, Alice, R,     k))
+  ||  inj-event(InitiatorHasNegotiatedNewKey(i, R,     Alice, k)).
+(* ✔︎ Expected result: true *)
+
+
+(* Main *)
+
+let Init() =
+  new authKey1: AuthKey;
+  new authKey2: AuthKey;
+  insert AuthKeyClientTable(Alice, Server, authKey1);
+  insert AuthKeyClientTable(Bob, Server, authKey2);
+  new a: Z;
+  new b: Z;
+  new i: ChatID;
+  let k = genStrongSessionKey(a,b) in
+  insert SecretChatClientTable(Alice, Alice, Bob, STRONG, GOOD, a, i, k);
+  insert SecretChatClientTable(Bob, Alice, Bob, STRONG, GOOD, b, i, k);
+  0.
+
+process
+  (0
+    | !Init()
+    | !RegisterSessionKey()
+    | !RekeyingInitiator(Server)
+    | !RekeyingResponder(Server)
+    | !RekeyingSend(Server)
+    | !RekeyingReceive(Server)
+  )
+

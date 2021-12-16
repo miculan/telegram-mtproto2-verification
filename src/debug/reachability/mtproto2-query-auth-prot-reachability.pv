@@ -1,0 +1,155 @@
+query nc: Nonce;
+  event(ClientStartsSession(nc)).
+(* ✖︎ Expected result: false *)
+
+query nc: Nonce, k: PubKey;
+  event(ClientGetsServerPublicKey(nc, k)).
+(* ✖︎ Expected result: false *)
+
+query nc: Nonce, ns: Nonce, nk: Nonce;
+  event(ClientRequestsDHParameters(nc, ns, nk)).
+(* ✖︎ Expected result: false *)
+
+query nc: Nonce, ns: Nonce, nk: Nonce, p: Modulus, g: G, g_s: G;
+  event(ClientReceivesDHParameters(nc, ns, nk, p, g, g_s)).
+(* ✖︎ Expected result: false *)
+
+query nc: Nonce, ns: Nonce, nk: Nonce, p: Modulus, g: G, g_s: G;
+  event(ClientChecksDHParameters(nc, ns, nk, p, g, g_s, true)).
+(* ✖︎ Expected result: false *)
+
+query nc: Nonce, ns: Nonce, nk: Nonce, p: Modulus, g: G, g_s: G;
+  event(ClientChecksDHParameters(nc, ns, nk, p, g, g_s, false)).
+(* ✖︎ Expected result: false *)
+
+query nc: Nonce, ns: Nonce, nk: Nonce, p: Modulus, g: G, g_s: G;
+  event(ClientAcceptsDHParameters(nc, ns, nk, p, g, g_s)).
+(* ✖︎ Expected result: false *)
+
+query nc: Nonce, ns: Nonce, nk: Nonce, p: Modulus, g: G, g_s: G, a: Z, k: AuthKey;
+  event(ClientEndsDHExchange(nc, ns, nk, p, g, g_s, a, k)).
+(* ✖︎ Expected result: false *)
+
+query nc: Nonce, ns: Nonce, nk: Nonce, p: Modulus, g: G, g_s: G, a: Z, k: AuthKey;
+  event(ClientAcceptsAuthKey(nc, ns, nk, p, g, g_s, a, k)).
+(* ✖︎ Expected result: false *)
+
+query nc: Nonce, ns: Nonce, nk: Nonce, p: Modulus, g: G, g_s: G, a: Z, k: AuthKey;
+  event(ClientReceivesAck(nc, ns, nk, p, g, g_s, a, k)).
+(* ✖︎ Expected result: false *)
+
+query nc: Nonce;
+  event(ServerReceivesRequest(nc)).
+(* ✖︎ Expected result: false *)
+
+query p: ProcessID, n: Nonce;
+  event(ServerGeneratesNonce(p, n)).
+(* ✖︎ Expected result: false *)
+
+query nc: Nonce, ns: Nonce, nk: Nonce;
+  event(ServerAcceptsClient(nc, ns, nk)).
+(* ✖︎ Expected result: false *)
+
+query nc: Nonce, ns: Nonce, nk: Nonce, p: Modulus, g: G, x: Z;
+  event(ServerSendsDHParameters(nc, ns, nk, p, g, x)).
+(* ✖︎ Expected result: false *)
+
+query nc: Nonce, ns: Nonce, nk: Nonce, p: Modulus, g, g': G, b: Z, k: AuthKey;
+  event(ServerEndsDHExchange(nc, ns, nk, p, g, g', b, k)).
+(* ✖︎ Expected result: false *)
+
+query nc: Nonce, ns: Nonce, nk: Nonce, p: Modulus, g, g': G, b: Z, k: AuthKey;
+  event(ServerAcceptsAuthKey(nc, ns, nk, p, g, g', b, k)).
+(* ✖︎ Expected result: false *)
+
+query nc: Nonce, ns: Nonce, nk: Nonce, p: Modulus, g, g': G, b: Z, k: AuthKey;
+  event(ServerSendsAck(nc, ns, nk, p, g, g', b, k)).
+(* ✖︎ Expected result: false *)
+
+query k: PrivKey;
+  event(RevealedRSAKey(k)).
+(* ✖︎ Expected result: false *)
+
+query k: AuthKey;
+  event(RevealedAuthKey(k)).
+(* ✖︎ Expected result: false *)
+
+query k: AuthKey;
+  event(RevealedServerAuthKey(k)).
+(* ✖︎ Expected result: false *)
+
+query nk: Nonce;
+  event(RevealedNk(nk)).
+(* ✖︎ Expected result: false *)
+
+query a: Z;
+  event(RevealedAuthProtClientExponent(a)).
+(* ✖︎ Expected result: false *)
+
+query nk: Nonce, a: Z;
+  event(RevealedAuthProtClientEphemeralSecrets(nk, a)).
+(* ✖︎ Expected result: false *)
+
+query b: Z;
+  event(RevealedAuthProtServerExponent(b)).
+(* ✖︎ Expected result: false *)
+
+query k: PrivKey;
+  event(PostCompromisedRSAKey(k)).
+(* ✖︎ Expected result: false *)
+
+query k: AuthKey;
+  event(PostCompromisedAuthKey(k)).
+(* ✖︎ Expected result: false *)
+
+query nk: Nonce;
+  event(PostCompromisedNk(nk)).
+(* ✖︎ Expected result: false *)
+
+query a: Z;
+  event(PostCompromisedAuthProtClientExponent(a)).
+(* ✖︎ Expected result: false *)
+
+query b: Z;
+  event(PostCompromisedAuthProtServerExponent(b)).
+(* ✖︎ Expected result: false *)
+
+query nc, ns, nk: Nonce, p: Modulus, g, gx: G, x: Z, k: AuthKey;
+  event(ClientRequestsDHParameters(nc, ns, nk))
+  && event(ServerSendsAck(nc, ns, nk, p, g, gx, x, k)).
+(* ✖︎ Expected result: false *)
+
+query nc, ns, nk: Nonce, p: Modulus, g, gx: G, x: Z, k: AuthKey;
+  event(ClientRequestsDHParameters(nc, ns, nk))
+  && event(ServerSendsAck(nc, ns, nk, p, g, gx, x, k)).
+(* ✖︎ Expected result: false *)
+
+query nc, nc', ns, ns', nk, nk': Nonce, p, p': Modulus, g, g', gx, gx': G, x, x': Z, k: AuthKey;
+  event(ServerAcceptsAuthKey(nc, ns, nk, p, g, gx, x, k))
+  && event(ClientAcceptsAuthKey(nc', ns', nk', p', g', gx', x', k)).
+(* ✖︎ Expected result: false *)
+
+
+(* Main *)
+process
+  let allowWeakDiffieHellman = true in
+  (0
+    | !RegisterRSAKey(Server)
+    | !ServerAuth(Server)
+    | !ClientAuth(Server, allowWeakDiffieHellman)
+    | !GenGoodDHParameters()
+    | !GenBadDHParameters()
+    | !RevealRSAKey()
+    | !RevealNk()
+    | !RevealAuthProtClientExponent()
+    | !RevealAuthProtClientEphemeralSecrets()
+    | !RevealAuthProtServerExponent()
+    | !RevealAuthKey()
+    | !RevealServerAuthKey()
+    | !PostCompromiseRSAKey()
+    | !PostCompromiseAuthKey()
+    | !PostCompromiseNk()
+    | !PostCompromiseAuthProtClientExponent()
+    | !PostCompromiseAuthProtServerExponent()
+  )
+

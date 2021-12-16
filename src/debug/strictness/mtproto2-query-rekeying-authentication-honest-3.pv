@@ -1,0 +1,63 @@
+query x, x': Z, i: ChatID, X: Principal, k: SessionKey, m: bitstring;
+  event(ClientReceivesMessageWithNewKey(x, X, i, Alice, Bob, k, m))
+  ==> event(ClientSendsMessageWithNewKey(x', Bob, i, Alice, Bob, k, m))
+  ||  event(ClientSendsMessageWithNewKey(x', Alice, i, Bob, Alice, k, m))
+  ||  event(ClientSendsMessageWithNewKey(x', Bob, i, Bob, Alice, k, m)).
+(* ✖︎ Expected result: false *)
+
+query x, x': Z, i: ChatID, X: Principal, k: SessionKey, m: bitstring;
+  event(ClientReceivesMessageWithNewKey(x, X, i, Alice, Bob, k, m))
+  ==> event(ClientSendsMessageWithNewKey(x', Alice, i, Alice, Bob, k, m))
+  ||  event(ClientSendsMessageWithNewKey(x', Alice, i, Bob, Alice, k, m))
+  ||  event(ClientSendsMessageWithNewKey(x', Bob, i, Bob, Alice, k, m)).
+(* ✖︎ Expected result: false *)
+
+query x, x': Z, i: ChatID, X: Principal, k: SessionKey, m: bitstring;
+  event(ClientReceivesMessageWithNewKey(x, X, i, Alice, Bob, k, m))
+  ==> event(ClientSendsMessageWithNewKey(x', Alice, i, Alice, Bob, k, m))
+  ||  event(ClientSendsMessageWithNewKey(x', Bob, i, Alice, Bob, k, m))
+  ||  event(ClientSendsMessageWithNewKey(x', Bob, i, Bob, Alice, k, m)).
+(* ✖︎ Expected result: false *)
+
+query x, x': Z, i: ChatID, X: Principal, k: SessionKey, m: bitstring;
+  event(ClientReceivesMessageWithNewKey(x, X, i, Alice, Bob, k, m))
+  ==> event(ClientSendsMessageWithNewKey(x', Alice, i, Alice, Bob, k, m))
+  ||  event(ClientSendsMessageWithNewKey(x', Bob, i, Alice, Bob, k, m))
+  ||  event(ClientSendsMessageWithNewKey(x', Alice, i, Bob, Alice, k, m)).
+(* ✖︎ Expected result: false *)
+
+query x, x': Z, i: ChatID, X: Principal, k: SessionKey, m: bitstring;
+  event(ClientReceivesMessageWithNewKey(x, X, i, Alice, Bob, k, m))
+  ==> inj-event(ClientSendsMessageWithNewKey(x', Alice, i, Alice, Bob, k, m))
+  ||  inj-event(ClientSendsMessageWithNewKey(x', Bob, i, Alice, Bob, k, m))
+  ||  inj-event(ClientSendsMessageWithNewKey(x', Alice, i, Bob, Alice, k, m))
+  ||  inj-event(ClientSendsMessageWithNewKey(x', Bob, i, Bob, Alice, k, m)).
+(* ✖︎ Expected result: false (but non-inj. version is true) *)
+(* NOTE: the non-injective version holds! *)
+
+
+(* Main *)
+
+let Init() =
+  new authKey1: AuthKey;
+  new authKey2: AuthKey;
+  insert AuthKeyClientTable(Alice, Server, authKey1);
+  insert AuthKeyClientTable(Bob, Server, authKey2);
+  new a: Z;
+  new b: Z;
+  new i: ChatID;
+  let k = genStrongSessionKey(a,b) in
+  insert SecretChatClientTable(Alice, Alice, Bob, STRONG, GOOD, a, i, k);
+  insert SecretChatClientTable(Bob, Alice, Bob, STRONG, GOOD, b, i, k);
+  0.
+
+process
+  (0
+    | !Init()
+    | !RegisterSessionKey()
+    | !RekeyingInitiator(Server)
+    | !RekeyingResponder(Server)
+    | !RekeyingSend(Server)
+    | !RekeyingReceive(Server)
+  )
+

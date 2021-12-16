@@ -1,0 +1,61 @@
+(*
+ * MTProto 2.0: Rekeying
+ *
+ * Model for the protocol used for updating the session keys of secret chats.
+ *
+ * See: https://core.telegram.org/api/end-to-end/pfs
+ *
+ * Expected time to run this script: ~30s
+ *)
+
+(*
+ * If a client X (one of Alice or R) sends a message {m}_k in a session i
+ * (after rekeying), and a client Y (one of I or Bob) receives {m}_k in a the
+ * same session i, then the exchange happened within a session initiated by
+ * Alice with Bob as a responder.
+ *)
+query x, x': Z, i: ChatID, I, R, X, Y: Principal, k: SessionKey, m: bitstring;
+  event(ClientSendsMessageWithNewKey(x, X, i, Alice, R, k, m))
+  && event(ClientReceivesMessageWithNewKey(x', Y, i, I, Bob, k, m))
+  ==> I = Alice || R = Bob || k = group2sess(BAD).
+(* ✖︎ Expected result: false *)
+
+(*
+ * NOTE: the above is a consequence of the failure of the query in
+ * mtproto2-query-rekeying-authentication-failure.pv:
+ *
+ * 1. Alice generates session i and sends message {m}_k to Eve, with which
+ *    Alice believes she is sharing a key k.
+ * 2. Eve reuses i in a new session with Bob, and sends {m}_k to Bob: Bob
+ *    accepts the message because he believes he shares k with Eve.
+ *
+ * Eve does not know m: the issue is the wrong expectations of Alice and Bob,
+ * who believe they are talking to Eve, while they are talking to each other.
+ *)
+
+
+(* Main *)
+
+let Init() =
+  new a: Z;
+  new b: Z;
+  new i: ChatID;
+  let k = genStrongSessionKey(a,b) in
+  insert SecretChatClientTable(Alice, Alice, Bob, STRONG, GOOD, a, i, k);
+  insert SecretChatClientTable(Bob, Alice, Bob, STRONG, GOOD, b, i, k);
+  new authKey1: AuthKey;
+  new authKey2: AuthKey;
+  insert AuthKeyClientTable(Alice, Server, authKey1);
+  insert AuthKeyClientTable(Bob, Server, authKey2);
+  0.
+
+process
+  (0
+    | !Init()
+    | !RegisterSessionKey()
+    | !RekeyingInitiator(Server)
+    | !RekeyingResponder(Server)
+    | !RekeyingSend(Server)
+    | !RekeyingReceive(Server)
+  )
+

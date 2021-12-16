@@ -1,0 +1,64 @@
+(*
+ * NOTE: running this script without the secrecy assumption on the server's
+ * private key takes ~40min. The results are the same as with the assumption.
+ *)
+set preciseActions = true.
+
+not attacker(new sk).
+
+query nc, ns, nk, nk': Nonce, p, p': Modulus, g, g', g_a, g_b: G, a, b: Z, k, k': AuthKey, sk: PrivKey, pID, pID': ProcessID;
+  event   (ServerAcceptsAuthKey(nc, ns, nk,  p,  g,  g_a, a, k))
+  && event(ClientAcceptsAuthKey(nc, ns, nk', p', g', g_b, b, k'))
+  ==> (event(ServerGeneratesNonce(pID, ns)) && event(ServerGeneratesNonce(pID', ns)) && pID <> pID')
+  ||  event(RevealedNk(nk'))
+  ||  event(RevealedRSAKey(sk)).
+(* ✖︎ Expected result: false *)
+
+query nc, ns, nk, nk': Nonce, p, p': Modulus, g, g', g_a, g_b: G, a, b: Z, k, k': AuthKey, sk: PrivKey, pID, pID': ProcessID;
+  event   (ServerAcceptsAuthKey(nc, ns, nk,  p,  g,  g_a, a, k))
+  && event(ClientAcceptsAuthKey(nc, ns, nk', p', g', g_b, b, k'))
+  ==> k = k' && nk = nk' && p = p' && g = g'
+  ||  event(RevealedNk(nk'))
+  ||  event(RevealedRSAKey(sk)).
+(* ✖︎ Expected result: false *)
+
+query nc, ns, nk, nk': Nonce, p, p': Modulus, g, g', g_a, g_b: G, a, b: Z, k, k': AuthKey, sk: PrivKey, pID, pID': ProcessID;
+  event   (ServerAcceptsAuthKey(nc, ns, nk,  p,  g,  g_a, a, k))
+  && event(ClientAcceptsAuthKey(nc, ns, nk', p', g', g_b, b, k'))
+  ==> k = k' && nk = nk' && p = p' && g = g'
+  || (event(ServerGeneratesNonce(pID, ns)) && event(ServerGeneratesNonce(pID', ns)) && pID <> pID')
+  ||  event(RevealedRSAKey(sk)).
+(* ✖︎ Expected result: false *)
+
+(* Uncomment the following query if you comment out the secrecy assumption. *)
+(* query nc, ns, nk, nk': Nonce, p, p': Modulus, g, g', g_a, g_b: G, a, b: Z, k, k': AuthKey, sk: PrivKey, pID, pID': ProcessID; *)
+(*   event   (ServerAcceptsAuthKey(nc, ns, nk,  p,  g,  g_a, a, k)) *)
+(*   && event(ClientAcceptsAuthKey(nc, ns, nk', p', g', g_b, b, k')) *)
+(*   ==> k = k' && nk = nk' && p = p' && g = g' *)
+(*   || (event(ServerGeneratesNonce(pID, ns)) && event(ServerGeneratesNonce(pID', ns)) && pID <> pID') *)
+(*   ||  event(RevealedNk(nk')). *)
+(* ✖︎ Expected result: false *)
+
+
+(* Main *)
+process
+  let allowWeakDiffieHellman = false in
+  (0
+    | !RegisterRSAKey(Server)
+    | !ServerAuth(Server)
+    | !ClientAuth(Server, allowWeakDiffieHellman)
+    | !GenGoodDHParameters()
+
+    (* | !RevealRSAKey() *)
+
+    (* Allow the attacker to reveal (part of) the client's ephemeral state *)
+    | !RevealNk()
+    | !RevealAuthProtClientExponent()
+
+    (* Allow the attacker to learn any authorization key *)
+    | !RevealAuthKey()
+
+    (* Allow the attacker to reveal the server's ephemeral key (the DH exponent) *)
+    | !RevealAuthProtServerExponent()
+  )
+

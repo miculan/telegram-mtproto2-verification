@@ -1,0 +1,71 @@
+(*
+ * MTProto 2.0: Rekeying
+ *
+ * Model for the protocol used for updating the session keys of secret chats.
+ *
+ * See: https://core.telegram.org/api/end-to-end/pfs
+ *
+ * Expected time to run this script: ~30s
+ *)
+
+(*
+ * If an (honest) initiator I accepts a new key k in a rekeying session i with
+ * another party R, and an (honest) responder R' accepts the same key k in the
+ * same session i with I', then there should be only two parties involved
+ * (ideally, I = I' and R = R'). In this query, we check that at least one
+ * entity appears in both events (we do not even impose that such entity acts
+ * as the initiator at one side and as the responder at the other). Despite
+ * this weak requirement, the query turns out to be false, i.e., there is a
+ * trace showing that I, I', R, and R' may be all different.
+ *)
+query i: ChatID, I, I', R, R': Principal, k: SessionKey;
+  event(InitiatorHasNegotiatedNewKey   (i, I,  R,  k))
+  && event(ResponderHasNegotiatedNewKey(i, I', R', k))
+  ==> I = I' || I = R' || R = I' || R = R'
+  || k = group2sess(BAD).
+(* ✖︎ Expected result: false *)
+
+(*
+ * NOTE: the above does not hold, because an evil client E might mount the
+ * following attack. When A starts a rekeying session with E, E starts a
+ * different rekeying session with B.
+ *
+ * A -> E: g^a
+ * E -> B: g^a
+ * B -> E: g^b
+ * E -> A: g^b
+ *
+ * The end result is that A and B share the same new key (unknown to E), but they
+ * believe that they share it with E.
+ *
+ * NOTE: to be able to disprove the query, the trace uses two dishonest parties
+ * E, E' (communicating offline between themselves) instead of one. But the
+ * idea is the same.
+ *)
+
+
+(* Main *)
+
+let Init() =
+  new authKey1: AuthKey;
+  new authKey2: AuthKey;
+  insert AuthKeyClientTable(Alice, Server, authKey1);
+  insert AuthKeyClientTable(Bob, Server, authKey2);
+  new a: Z;
+  new b: Z;
+  new i: ChatID;
+  let k = genStrongSessionKey(a,b) in
+  insert SecretChatClientTable(Alice, Alice, Bob, STRONG, GOOD, a, i, k);
+  insert SecretChatClientTable(Bob, Alice, Bob, STRONG, GOOD, b, i, k);
+  0.
+
+process
+  (0
+    | !Init()
+    | !RegisterSessionKey()
+    | !RekeyingInitiator(Server)
+    | !RekeyingResponder(Server)
+    | !RekeyingSend(Server)
+    | !RekeyingReceive(Server)
+  )
+

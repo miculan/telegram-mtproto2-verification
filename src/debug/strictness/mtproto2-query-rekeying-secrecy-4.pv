@@ -1,0 +1,40 @@
+query k: SessionKey, m: bitstring, x,a,b: Z, X,I,R: Principal, i: ChatID;
+  event(ClientSendsMessageWithNewKey(x, X, i, I, R, k, m))
+  ==> (event(PostCompromisedRekeyingInitiatorEphemeralKey(a)) && event(PostCompromisedRekeyingResponderEphemeralKey(b))).
+(* ✖︎ Expected result: false *)
+
+query k: SessionKey, m: bitstring, x,a,b: Z, X,I,R: Principal, i: ChatID;
+  attacker(m)
+  ==> (event(PostCompromisedRekeyingInitiatorEphemeralKey(a)) && event(PostCompromisedRekeyingResponderEphemeralKey(b))).
+(* ✖︎ Expected result: false *)
+
+
+(* Main *)
+
+let Init() =
+  new authKey1: AuthKey;
+  new authKey2: AuthKey;
+  insert AuthKeyClientTable(Alice, Server, authKey1);
+  insert AuthKeyClientTable(Bob, Server, authKey2);
+  new a: Z;
+  new b: Z;
+  new i: ChatID;
+  let k = genStrongSessionKey(a,b) in
+  insert SecretChatClientTable(Alice, Alice, Bob, STRONG, GOOD, a, i, k);
+  insert SecretChatClientTable(Bob, Alice, Bob, STRONG, GOOD, b, i, k);
+  0.
+
+process
+  let allowWeakDiffieHellman = false in
+  (0
+    | !Init()
+    | !RekeyingInitiator(Server)
+    | !RekeyingResponder(Server)
+    | !RekeyingSend(Server)
+    | !RekeyingReceive(Server)
+    | !RevealRekeyingInitiatorEphemeralKey()
+    | !RevealRekeyingResponderEphemeralKey()
+    | !PostCompromiseRekeyingInitiatorEphemeralKey()
+    | !PostCompromiseRekeyingResponderEphemeralKey()
+  )
+

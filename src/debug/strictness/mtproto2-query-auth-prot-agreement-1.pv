@@ -1,0 +1,33 @@
+set preciseActions = true.
+
+not attacker(new sk).
+not attacker(new a).
+not attacker(new b).
+not attacker(new nk).
+
+query nc, ns, nk, nk': Nonce, p, p': Modulus, g, g', gx, gx': G, x, x': Z, k, k': AuthKey, sk: PrivKey, pID, pID': ProcessID;
+  event(ServerAcceptsAuthKey(nc, ns, nk,  p,  g,  gx,  x,  k))
+  && event(ClientAcceptsAuthKey(nc, ns, nk', p', g', gx', x', k'))
+  ==> event(ServerGeneratesNonce(pID, ns))
+  &&  event(ServerGeneratesNonce(pID', ns))
+  &&  pID <> pID'.
+(* ✖︎ Expected result: false *)
+
+query nc, ns, nk, nk': Nonce, p, p': Modulus, g, g', gx, gx': G, x, x': Z, k, k': AuthKey, sk: PrivKey, pID, pID': ProcessID;
+  event(ServerAcceptsAuthKey(nc, ns, nk,  p,  g,  gx,  x,  k))
+  && event(ClientAcceptsAuthKey(nc, ns, nk', p', g', gx', x', k'))
+  ==> k = k'.
+(* ✖︎ Expected result: false *)
+
+
+(* Main *)
+process
+  let allowWeakDiffieHellman = true in
+  (0
+    | !RegisterRSAKey(Server)
+    | !ServerAuth(Server)
+    | !ClientAuth(Server, allowWeakDiffieHellman)
+    | !GenGoodDHParameters()
+    | !GenBadDHParameters()
+  )
+

@@ -1,0 +1,34 @@
+set preciseActions = true.
+
+not attacker(new sk).
+not attacker(new a).
+not attacker(new b).
+not attacker(new nk).
+
+query m: bitstring;
+  attacker(m).
+(* ✖︎ Expected result: false (trivial!) *)
+
+query s: Nonce, m: bitstring, k: AuthKey;
+  event(ClientSendsCloudMessage(s, m, k)).
+(* ✖︎ Expected result: false *)
+
+query s: Nonce, m: bitstring, k: AuthKey;
+  attacker(m)
+  ==> event(RevealedAuthKey(k)).
+(* ✖︎ Expected result: false (trivial!) *)
+
+
+(* Main *)
+
+process
+  (0
+    | !RegisterRSAKey(Server)
+    | !ServerAuth(Server)
+    | !ClientAuth(Server, false)
+    | !ServerCloudChat()
+    | !ClientCloudChat(Server)
+    | !GenGoodDHParameters()
+    | !RevealAuthKey()
+  )
+

@@ -1,0 +1,43 @@
+(*
+ * MTProto 2.0: Creating an authorization key.
+ *
+ * Model for the protocol used to create long-term keys shared between a client
+ * and Telegram's server.
+ *
+ * See: https://core.telegram.org/mtproto/auth_key
+ *
+ * Expected time to run this script: <1s
+ *)
+
+set preciseActions = true.
+
+(*
+ * In general, there is no authentication of the client to the server (see
+ * mtproto2-query-auth-prot-authentication-client-to-server-1.pv).
+ * However, at the end of a correct run of the authorization protocol, the
+ * server knows for sure that the client that has negotiated the authorization
+ * key k is the client who has sent the third message of the protocol.
+ *)
+query nc, ns, nk: Nonce, p: Modulus, g, gx, gx': G, x, x': Z, k: AuthKey, sk: PrivKey, pID, pID': ProcessID;
+  event(ClientRequestsDHParameters(nc, ns, nk))
+  && event(ServerSendsAck(nc, ns, nk, p, g, gx, x, k))
+  ==> event(ClientAcceptsAuthKey(nc, ns, nk, p, g, gx', x', k))
+  || (
+    event(ServerGeneratesNonce(pID, ns))
+    && event(ServerGeneratesNonce(pID', ns))
+    && pID <> pID'
+  ).
+(* ✔︎ Expected result: true *)
+
+
+(* Main *)
+process
+  let allowWeakDiffieHellman = true in
+  (0
+    | !RegisterRSAKey(Server)
+    | !ServerAuth(Server)
+    | !ClientAuth(Server, allowWeakDiffieHellman)
+    | !GenGoodDHParameters()
+    | !GenBadDHParameters()
+  )
+

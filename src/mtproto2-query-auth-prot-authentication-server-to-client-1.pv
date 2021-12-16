@@ -1,0 +1,62 @@
+(*
+ * MTProto 2.0: Creating an authorization key.
+ *
+ * Model for the protocol used to create long-term keys shared between a client
+ * and Telegram's server.
+ *
+ * See: https://core.telegram.org/mtproto/auth_key
+ *
+ * Expected time to run this script: ~40s
+ *)
+
+set preciseActions = true.
+
+(* There is authentication of the server to the client. *)
+query nc, ns, nk: Nonce, p, p': Modulus, g, g', gx, gx': G, x, x': Z, k: AuthKey, pID, pID': ProcessID, sk: PrivKey;
+  inj-event(ClientReceivesAck(nc, ns, nk, p, g, gx, x, k))
+  ==> inj-event(ServerAcceptsAuthKey(nc, ns, nk, p', g', gx', x', k))
+  (*
+   * NOTE: the following disjunct is not strictly necessary.
+   * The following disjunct would be necessary if hashNk() depended only on nk
+   * or, equivalently, if the attacker could somehow compute the part of
+   * hashNk() that depends on the authorization key. Note that hashNk() is not
+   * cryptographically strong.
+   *)
+  (* || ( *)
+  (* The server reuses its nonce *)
+  (*   event(ServerGeneratesNonce(pID, ns)) *)
+  (*   && event(ServerGeneratesNonce(pID', ns)) *)
+  (*   && pID <> pID' *)
+  (*   && event(ClientChecksDHParameters(nc, ns, nk, p, g, gx, false)) *)
+  (* ) *)
+  || event(RevealedRSAKey(sk))
+  || event(RevealedNk(nk)).
+(* ✔︎ Expected result: true *)
+
+
+(* Main *)
+process
+  let allowWeakDiffieHellman = true in
+  (0
+    | !RegisterRSAKey(Server)
+    | !ServerAuth(Server)
+    | !ClientAuth(Server, allowWeakDiffieHellman)
+    | !GenGoodDHParameters()
+    | !GenBadDHParameters()
+
+    (* Allow the attacker to impersonate the server *)
+    | !RevealRSAKey()
+
+    (* Allow the attacker to learn any authorization key… *)
+    | !RevealAuthKey()
+    (* …and register an authorization with the server for itself *)
+    | !RegisterAuthKey()
+
+    (* Allow the attacker to reveal (part of) the client's ephemeral state *)
+    | !RevealNk()
+    | !RevealAuthProtClientExponent()
+
+    (* Allow the attacker to reveal the server's ephemeral key (the DH exponent) *)
+    | !RevealAuthProtServerExponent()
+  )
+

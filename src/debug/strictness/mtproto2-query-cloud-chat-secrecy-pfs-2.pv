@@ -1,0 +1,67 @@
+set preciseActions = true.
+
+query s: Nonce, m: bitstring, k: AuthKey, nk: Nonce, a,b: Z, sk: PrivKey;
+  event(ClientReceivesCloudMessage(s, m, k))
+  && attacker(m)
+  ==> event(PostCompromisedRSAKey(sk))
+  || (event(PostCompromisedNk(nk)) && event(PostCompromisedAuthProtClientExponent(b)))
+  || (event(PostCompromisedNk(nk)) && event(PostCompromisedAuthProtServerExponent(a)))
+  || (event(PostCompromisedAuthProtClientExponent(b)) && event(PostCompromisedAuthProtServerExponent(a))).
+(* ✖︎ Expected result: false *)
+
+query s: Nonce, m: bitstring, k: AuthKey, nk: Nonce, a,b: Z, sk: PrivKey;
+  event(ClientReceivesCloudMessage(s, m, k))
+  && attacker(m)
+  ==> event(PostCompromisedAuthKey(k))
+  || (event(PostCompromisedNk(nk)) && event(PostCompromisedAuthProtClientExponent(b)))
+  || (event(PostCompromisedNk(nk)) && event(PostCompromisedAuthProtServerExponent(a)))
+  || (event(PostCompromisedAuthProtClientExponent(b)) && event(PostCompromisedAuthProtServerExponent(a))).
+(* ✖︎ Expected result: false *)
+
+query s: Nonce, m: bitstring, k: AuthKey, nk: Nonce, a,b: Z, sk: PrivKey;
+  event(ClientReceivesCloudMessage(s, m, k))
+  && attacker(m)
+  ==> event(PostCompromisedAuthKey(k))
+  ||  event(PostCompromisedRSAKey(sk))
+  || (event(PostCompromisedNk(nk)) && event(PostCompromisedAuthProtServerExponent(a)))
+  || (event(PostCompromisedAuthProtClientExponent(b)) && event(PostCompromisedAuthProtServerExponent(a))).
+(* ✖︎ Expected result: false *)
+
+query s: Nonce, m: bitstring, k: AuthKey, nk: Nonce, a,b: Z, sk: PrivKey;
+  event(ClientReceivesCloudMessage(s, m, k))
+  && attacker(m)
+  ==> event(PostCompromisedAuthKey(k))
+  ||  event(PostCompromisedRSAKey(sk))
+  || (event(PostCompromisedNk(nk)) && event(PostCompromisedAuthProtClientExponent(b)))
+  || (event(PostCompromisedAuthProtClientExponent(b)) && event(PostCompromisedAuthProtServerExponent(a))).
+(* ✖︎ Expected result: false *)
+
+query s: Nonce, m: bitstring, k: AuthKey, nk: Nonce, a,b: Z, sk: PrivKey;
+  event(ClientReceivesCloudMessage(s, m, k))
+  && attacker(m)
+  ==> event(PostCompromisedAuthKey(k))
+  ||  event(PostCompromisedRSAKey(sk))
+  || (event(PostCompromisedNk(nk)) && event(PostCompromisedAuthProtClientExponent(b)))
+  || (event(PostCompromisedNk(nk)) && event(PostCompromisedAuthProtServerExponent(a))).
+(* ✖︎ Expected result: false *)
+
+
+(* Main *)
+
+process
+  let weakDiffieHellman = false in
+  (0
+    | !RegisterRSAKey(Server)
+    | !ServerAuth(Server)
+    | !ClientAuth(Server, weakDiffieHellman)
+    | !ServerCloudChat()
+    | !ClientCloudChat(Server)
+    | !GenGoodDHParameters()
+    (* Post-compromise attacks *)
+    | !PostCompromiseRSAKey()
+    | !PostCompromiseAuthKey()
+    | !PostCompromiseNk()
+    | !PostCompromiseAuthProtClientExponent()
+    | !PostCompromiseAuthProtServerExponent()
+  )
+
