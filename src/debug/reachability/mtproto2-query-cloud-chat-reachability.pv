@@ -1,3 +1,5 @@
+set preciseActions = true.
+
 query n: Nonce, s: bitstring, k: AuthKey;
   event(ClientSendsCloudMessage(n, s, k)).
 (* ✖︎ Expected result: false *)
@@ -20,6 +22,27 @@ query n: Nonce, s: bitstring, k: AuthKey;
 
 query n: Nonce, s: bitstring, k: AuthKey;
   event (ServerReceivesCloudMessageInPhaseOne(n, s, k)).
+(* ✖︎ Expected result: false *)
+
+query s: Nonce, m: bitstring, k: AuthKey, nc,ns,nk: Nonce, p: Modulus, g, g_a: G, b: Z;
+  event(ClientAcceptsAuthKey(nc, ns, nk, p, g, g_a, b, k))
+  && event(ServerReceivesCloudMessage(s, m, k)).
+(* ✖︎ Expected result: false *)
+
+query s: Nonce, m: bitstring, k: AuthKey;
+  event(ClientSendsCloudMessage(s, m, k))
+  && attacker(m).
+(* ✖︎ Expected result: false *)
+
+query s: Nonce, m: bitstring, k: AuthKey;
+  event(ClientReceivesCloudMessage(s, m, k))
+  && attacker(m).
+(* ✖︎ Expected result: false *)
+
+query s: Nonce, m: bitstring, k: AuthKey, nc,ns,nk: Nonce, p: Modulus, g,g_a: G, a,b: Z, sk: PrivKey;
+  event(ClientAcceptsAuthKey(nc, ns, nk, p, g, g_a, b, k))
+  && event(ServerReceivesCloudMessage(s, m, k))
+  && attacker(m).
 (* ✖︎ Expected result: false *)
 
 query attacker(new m1).

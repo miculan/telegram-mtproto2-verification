@@ -12,8 +12,7 @@
 set preciseActions = true.
 
 query nc, ns, nk: Nonce, p: Modulus, g, g_a, g_b: G, a, b: Z, k: AuthKey, S: Principal, sk: PrivKey;
-  event   (ClientAcceptsAuthKey(nc, ns, nk, p, g, g_a, b, k))
-  && event(ServerAcceptsAuthKey(nc, ns, nk, p, g, g_b, a, k))
+  event(ClientAcceptsAuthKey(nc, ns, nk, p, g, g_a, b, k))
   && attacker(k)
   ==> event(ClientChecksDHParameters(nc, ns, nk, p, g, g_a, false))
   ||  event(RevealedRSAKey(sk))

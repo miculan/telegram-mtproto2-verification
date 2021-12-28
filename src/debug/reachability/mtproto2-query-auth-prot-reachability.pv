@@ -119,14 +119,25 @@ query nc, ns, nk: Nonce, p: Modulus, g, gx: G, x: Z, k: AuthKey;
   && event(ServerSendsAck(nc, ns, nk, p, g, gx, x, k)).
 (* ✖︎ Expected result: false *)
 
-query nc, ns, nk: Nonce, p: Modulus, g, gx: G, x: Z, k: AuthKey;
-  event(ClientRequestsDHParameters(nc, ns, nk))
-  && event(ServerSendsAck(nc, ns, nk, p, g, gx, x, k)).
+query nc, nc', ns, ns', nk, nk': Nonce, p, p': Modulus, g, g', gx, gx': G, x, x': Z, k: AuthKey;
+  event(ServerAcceptsAuthKey(nc, ns, nk, p, g, gx, x, k))
+  && event(ClientAcceptsAuthKey(nc', ns', nk', p', g', gx', x', k)).
 (* ✖︎ Expected result: false *)
 
 query nc, nc', ns, ns', nk, nk': Nonce, p, p': Modulus, g, g', gx, gx': G, x, x': Z, k: AuthKey;
   event(ServerAcceptsAuthKey(nc, ns, nk, p, g, gx, x, k))
-  && event(ClientAcceptsAuthKey(nc', ns', nk', p', g', gx', x', k)).
+  && event(ClientAcceptsAuthKey(nc', ns', nk', p', g', gx', x', k))
+  && attacker(k).
+(* ✖︎ Expected result: false *)
+
+query nc, ns, nk: Nonce, p: Modulus, g, gx: G, x: Z, k: AuthKey;
+  event(ClientStartsSession(nc))
+  && event(ServerSendsAck(nc, ns, nk, p, g, gx, x, k)).
+(* ✖︎ Expected result: false *)
+
+query nc, ns, nk: Nonce, p: Modulus, g, gx: G, x: Z, k: AuthKey;
+  event(ClientRequestsDHParameters(nc, ns, nk))
+  && event(ServerSendsAck(nc, ns, nk, p, g, gx, x, k)).
 (* ✖︎ Expected result: false *)
 
 

@@ -42,14 +42,13 @@ query nc, ns, nk, nk': Nonce, p, p': Modulus, g, g', g_a, g_b: G, a, b: Z, k, k'
 
 (* Main *)
 process
-  let allowWeakDiffieHellman = false in
+  let allowWeakDiffieHellman = true in
   (0
     | !RegisterRSAKey(Server)
     | !ServerAuth(Server)
     | !ClientAuth(Server, allowWeakDiffieHellman)
     | !GenGoodDHParameters()
-
-    (* | !RevealRSAKey() *)
+    | !GenBadDHParameters()
 
     (* Allow the attacker to reveal (part of) the client's ephemeral state *)
     | !RevealNk()
@@ -57,6 +56,8 @@ process
 
     (* Allow the attacker to learn any authorization key *)
     | !RevealAuthKey()
+
+    (* | !RevealRSAKey() *)
 
     (* Allow the attacker to reveal the server's ephemeral key (the DH exponent) *)
     | !RevealAuthProtServerExponent()

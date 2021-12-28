@@ -280,6 +280,64 @@ query nc, ns, nk: Nonce, p: Modulus, g, g_a, g_b: G, a, b: Z, k: AuthKey, S: Pri
   || (event(RevealedAuthProtServerExponent(a))        && event(PostCompromisedNk(nk))).
 (* ✖︎ Expected result: false *)
 
+query nc, ns, nk: Nonce, p: Modulus, g, g_a, g_b: G, a, b: Z, k: AuthKey, S: Principal, sk: PrivKey;
+  event(ServerAcceptsAuthKey(nc, ns, nk, p, g, g_b, a, k))
+  && attacker(k)
+  ==> event(ClientChecksDHParameters(nc, ns, nk, p, g, g_a, false))
+  ||  event(RevealedRSAKey(sk))
+  ||  event(RevealedAuthKey(k))
+  ||  event(RevealedNk(nk))
+  || (event(RevealedAuthProtClientExponent(b)) && event(RevealedAuthProtServerExponent(a)))
+  (* Post-compromises *)
+  || event(PostCompromisedAuthKey(k))
+  || event(PostCompromisedRSAKey(sk))
+  || (event(RevealedAuthProtClientExponent(b))        && event(PostCompromisedAuthProtServerExponent(a)))
+  || (event(PostCompromisedAuthProtClientExponent(b)) && event(RevealedAuthProtServerExponent(a)))
+  || (event(PostCompromisedAuthProtServerExponent(a)) && event(PostCompromisedAuthProtClientExponent(b)))
+  || (event(PostCompromisedAuthProtServerExponent(a)) && event(PostCompromisedNk(nk)))
+  || (event(PostCompromisedAuthProtClientExponent(b)) && event(PostCompromisedNk(nk)))
+  || (event(RevealedAuthProtServerExponent(a))        && event(PostCompromisedNk(nk)))
+  || (event(RevealedAuthProtClientExponent(b))        && event(PostCompromisedNk(nk))).
+(* ✖︎ Expected result: false *)
+
+query nc, ns, nk: Nonce, p: Modulus, g, g_a, g_b: G, a, b: Z, k: AuthKey, S: Principal, sk: PrivKey;
+  attacker(k)
+  ==> event(ClientChecksDHParameters(nc, ns, nk, p, g, g_a, false))
+  ||  event(RevealedRSAKey(sk))
+  ||  event(RevealedAuthKey(k))
+  ||  event(RevealedNk(nk))
+  || (event(RevealedAuthProtClientExponent(b)) && event(RevealedAuthProtServerExponent(a)))
+  (* Post-compromises *)
+  || event(PostCompromisedAuthKey(k))
+  || event(PostCompromisedRSAKey(sk))
+  || (event(RevealedAuthProtClientExponent(b))        && event(PostCompromisedAuthProtServerExponent(a)))
+  || (event(PostCompromisedAuthProtClientExponent(b)) && event(RevealedAuthProtServerExponent(a)))
+  || (event(PostCompromisedAuthProtServerExponent(a)) && event(PostCompromisedAuthProtClientExponent(b)))
+  || (event(PostCompromisedAuthProtServerExponent(a)) && event(PostCompromisedNk(nk)))
+  || (event(PostCompromisedAuthProtClientExponent(b)) && event(PostCompromisedNk(nk)))
+  || (event(RevealedAuthProtServerExponent(a))        && event(PostCompromisedNk(nk)))
+  || (event(RevealedAuthProtClientExponent(b))        && event(PostCompromisedNk(nk))).
+(* ✖︎ Expected result: false *)
+
+query nc, ns, nk: Nonce, p: Modulus, g, g_a, g_b: G, a, b: Z, k: AuthKey, S: Principal, sk: PrivKey;
+  event   (ClientAcceptsAuthKey(nc, ns, nk, p, g, g_a, b, k))
+  ==> event(ClientChecksDHParameters(nc, ns, nk, p, g, g_a, false))
+  ||  event(RevealedRSAKey(sk))
+  ||  event(RevealedAuthKey(k))
+  ||  event(RevealedNk(nk))
+  || (event(RevealedAuthProtClientExponent(b)) && event(RevealedAuthProtServerExponent(a)))
+  (* Post-compromises *)
+  || event(PostCompromisedAuthKey(k))
+  || event(PostCompromisedRSAKey(sk))
+  || (event(RevealedAuthProtClientExponent(b))        && event(PostCompromisedAuthProtServerExponent(a)))
+  || (event(PostCompromisedAuthProtClientExponent(b)) && event(RevealedAuthProtServerExponent(a)))
+  || (event(PostCompromisedAuthProtServerExponent(a)) && event(PostCompromisedAuthProtClientExponent(b)))
+  || (event(PostCompromisedAuthProtServerExponent(a)) && event(PostCompromisedNk(nk)))
+  || (event(PostCompromisedAuthProtClientExponent(b)) && event(PostCompromisedNk(nk)))
+  || (event(RevealedAuthProtServerExponent(a))        && event(PostCompromisedNk(nk)))
+  || (event(RevealedAuthProtClientExponent(b))        && event(PostCompromisedNk(nk))).
+(* ✖︎ Expected result: false *)
+
 
 process
   let allowWeakDiffieHellman = true in

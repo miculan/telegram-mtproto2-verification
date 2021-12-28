@@ -1,3 +1,5 @@
+set preciseActions = true.
+
 query i: ChatID, X: Principal, Y: Principal, g_a: G;
   event(InitiatorSendsHalfKey(i, X, Y, g_a)).
 (* ✖︎ Expected result: false *)
@@ -83,6 +85,25 @@ query k: SessionKey, m: bitstring, x,y,a,b: Z, X,Y,I,R: Principal, i: ChatID;
   && attacker(m).
 (* ✖︎ Expected result: false *)
 
+query x, x': Z, i: ChatID, I, R, X, Y: Principal, k: SessionKey, m: bitstring;
+  event(ClientSendsMessageWithNewKey(x, X, i, Alice, R, k, m))
+  && event(ClientReceivesMessageWithNewKey(x', Y, i, I, Bob, k, m)).
+(* ✖︎ Expected result: false *)
+
+query i: ChatID, I, R: Principal, k, k': SessionKey, m: bitstring;
+  event(InitiatorHasNegotiatedNewKey(i, I, R, k))
+  && event(ResponderHasNegotiatedNewKey(i, I, R, k')).
+(* ✖︎ Expected result: false *)
+
+query i: ChatID, I, I', R, R': Principal, k: SessionKey;
+  event(InitiatorHasNegotiatedNewKey   (i, I,  R,  k))
+  && event(ResponderHasNegotiatedNewKey(i, I', R', k)).
+(* ✖︎ Expected result: false *)
+
+query i, i': ChatID, I, R: Principal, k: SessionKey;
+  event(InitiatorHasNegotiatedNewKey   (i,  I,     Bob, k))
+  && event(ResponderHasNegotiatedNewKey(i', Alice, R,   k)).
+(* ✖︎ Expected result: false *)
 
 (* Main *)
 let Init() =
