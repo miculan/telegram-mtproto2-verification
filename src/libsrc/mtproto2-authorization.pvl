@@ -394,6 +394,10 @@ let ClientAuth(server: Principal, allowWeakDH: bool) =
 
   (* Generate the authorization key. *)
   let authKey = group2auth(dhExp(p, g_a, b)) in
+
+  (* Store the authKey for use by the other protocols. *)
+  insert AuthKeyClientTable(cUser, server, authKey);
+
   let g_b = dhExp(p, g, b) in
 
   (* Continue the DH exchange: send the client's half-key to the server. *)
@@ -408,9 +412,6 @@ let ClientAuth(server: Principal, allowWeakDH: bool) =
   in(io, ACK(=nc, =ns, =hashNk(nk, authKey)));
 
   event ClientReceivesAck(nc, ns, nk, p, g, g_a, b, authKey);
-
-  (* Store the authKey for use by the other protocols. *)
-  insert AuthKeyClientTable(cUser, server, authKey);
   0.
 
 
@@ -479,6 +480,9 @@ let ServerAuth(server: Principal) =
   let D2(=nc, =ns, g_b) = decodeAuthorizatioMsg(encData2, ns, nk) in
   let authKey = group2auth(dhExp(p, g_b, a)) in
 
+  (* Store the authKey for use by the other protocols. *)
+  insert AuthKeyServerTable(keyID(auth2shared(authKey)), authKey);
+
   insert AuthProtServerSessionState(nc, ns, nk, p, g, g_b, a);
 
   event ServerEndsDHExchange(nc, ns, nk, p, g, g_b, a, authKey);
@@ -487,9 +491,6 @@ let ServerAuth(server: Principal) =
 
   (* Sends an acknowledgment to the client. *)
   out(io, ACK(nc, ns, hashNk(nk, authKey)));
-
-  (* Store the authKey for use by the other protocols. *)
-  insert AuthKeyServerTable(keyID(auth2shared(authKey)), authKey);
   0.
 
 

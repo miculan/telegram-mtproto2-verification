@@ -6,24 +6,25 @@
  *
  * See: https://core.telegram.org/mtproto/auth_key
  *
- * Expected time to run this script: ~1s
+ * Expected time to run this script: ~2s
  *
  * NOTE: run this query against model3, which uses probabilistic encryption.
  *)
 
-let Pk() =
-  get AuthKeyClientTable(C: Principal, S: Principal, k: AuthKey) in
-  new r: AuthKey;
-  out(io, choice[k, r]).
+let Pb() =
+  get AuthProtClientEphemeralSecrets(nk: Nonce, b: Z) in
+  new n: Z;
+  out(io, choice[b, n]).
 (* ✔︎ Expected result: true *)
 
 process
-  let allowWeakDiffieHellman = false in
+  let allowWeakDiffieHellman = true in
   (0
     | !RegisterRSAKey(Server)
     | !ServerAuth(Server)
     | !ClientAuth(Server, allowWeakDiffieHellman)
     | !GenGoodDHParameters()
-    | Pk()
+    | !GenBadDHParameters()
+    | Pb()
   )
 
