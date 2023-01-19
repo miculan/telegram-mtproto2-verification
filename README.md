@@ -8,7 +8,7 @@ This research proves the formal correctness of MTProto 2.0 in the symbolic model
 
 This research has been describing in two papers:
 - Miculan, M. and Vitacolonna, N. *Automated Symbolic Verification of Telegram’s MTProto 2.0.* In "Proceedings of the 18th International Conference on Security and Cryptography - SECRYPT", pages 185-197. DOI: [10.5220/0010549601850197](https://doi.org/10.5220/0010549601850197)
-- Miculan, M. and Vitacolonna, N. *Automated Verification of Telegram’s MTProto 2.0 in the Symbolic Model*. Computers & Security 126, 2023. DOI: 10.1016/j.cose.2022.103072](https://doi.org/10.1016/j.cose.2022.103072)
+- Miculan, M. and Vitacolonna, N. *Automated Verification of Telegram’s MTProto 2.0 in the Symbolic Model*. Computers & Security 126, 2023. DOI: [10.1016/j.cose.2022.103072](https://doi.org/10.1016/j.cose.2022.103072)
 
 
 See the Readme in the `src` folder for further details.
